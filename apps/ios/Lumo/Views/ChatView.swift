@@ -305,7 +305,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: LumoSpacing.sm) {
                 LumoTextField(
-                    "Ask Lumo to book a flight, order dinner, plan a trip…",
+                    "Ask Orchet to book a flight, order dinner, plan a trip…",
                     text: $viewModel.input,
                     submitLabel: .send,
                     onSubmit: { viewModel.send(mode: .text) }
@@ -318,7 +318,7 @@ struct ChatView: View {
                 // the placeholder, which doesn't tell the user that
                 // tapping a chip above is a valid alternative.
                 .accessibilityLabel(
-                    Text("Ask Lumo to book a flight, order dinner, plan a trip. Or pick a suggestion above.")
+                    Text("Ask Orchet to book a flight, order dinner, plan a trip. Or pick a suggestion above.")
                 )
                 .accessibilityIdentifier("chat.composer.input")
 

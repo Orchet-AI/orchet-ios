@@ -58,7 +58,7 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .confirmationDialog(
-            "Sign out of Lumo?",
+            "Sign out of \(Brand.name)?",
             isPresented: $showSignOutConfirm,
             titleVisibility: .visible
         ) {
@@ -221,7 +221,7 @@ struct SettingsView: View {
                 )) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Speak responses aloud")
-                        Text("Use Lumo's voice to read assistant replies.")
+                        Text("Use Orchet's voice to read assistant replies.")
                             .font(LumoFonts.footnote)
                             .foregroundStyle(LumoColors.labelSecondary)
                     }
@@ -245,7 +245,7 @@ struct SettingsView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Voice")
-                        Text("How Lumo sounds when reading replies.")
+                        Text("How Orchet sounds when reading replies.")
                             .font(LumoFonts.footnote)
                             .foregroundStyle(LumoColors.labelSecondary)
                     }
@@ -403,7 +403,7 @@ struct SettingsView: View {
     private var supportSection: some View {
         Section("Support") {
             Button {
-                openURL(URL(string: "https://lumo.rentals/privacy")!)
+                openURL(URL(string: "https://\(Brand.domain)/privacy")!)
             } label: {
                 HStack {
                     Text("Privacy policy")
@@ -415,7 +415,7 @@ struct SettingsView: View {
             .foregroundStyle(LumoColors.label)
 
             Button {
-                openURL(URL(string: "https://lumo.rentals/terms")!)
+                openURL(URL(string: "https://\(Brand.domain)/terms")!)
             } label: {
                 HStack {
                     Text("Terms of service")
@@ -427,7 +427,7 @@ struct SettingsView: View {
             .foregroundStyle(LumoColors.label)
 
             Button {
-                if let url = URL(string: "mailto:support@lumo.rentals") {
+                if let url = URL(string: "mailto:\(Brand.supportEmail)") {
                     openURL(url)
                 }
             } label: {

@@ -44,10 +44,16 @@ struct OnboardingView: View {
             Image(systemName: "sparkles")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(LumoColors.cyan)
-            Text("Welcome to Lumo")
+            // Welcome screen carries the "(formerly Lumo)" parenthetical for
+            // ~60 days per REBRAND-LUMO-TO-ORCHET-1, then the parenthetical
+            // gets dropped. The product name is just "Orchet" everywhere else.
+            Text("Welcome to Orchet")
                 .font(LumoFonts.largeTitle)
                 .foregroundStyle(LumoColors.label)
-            Text("Your AI travel and lifestyle agent. Ask in plain English; Lumo plans, books, and remembers.")
+            Text("(formerly Lumo)")
+                .font(LumoFonts.caption)
+                .foregroundStyle(LumoColors.labelTertiary)
+            Text("Your AI travel and lifestyle agent. Ask in plain English; Orchet plans, books, and remembers.")
                 .font(LumoFonts.body)
                 .foregroundStyle(LumoColors.labelSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -59,7 +65,7 @@ struct OnboardingView: View {
             OnboardingPillarRow(
                 icon: "airplane",
                 title: "Plan and book in one chat",
-                description: "Flights, hotels, restaurants, ground transport. Lumo composes the whole trip and books it after you confirm."
+                description: "Flights, hotels, restaurants, ground transport. Orchet composes the whole trip and books it after you confirm."
             )
             OnboardingPillarRow(
                 icon: "brain.head.profile",
@@ -74,7 +80,7 @@ struct OnboardingView: View {
             OnboardingPillarRow(
                 icon: "bell.badge",
                 title: "Proactive moments",
-                description: "Lumo nudges before flights board, when prices drop, or when a booking needs your attention."
+                description: "Orchet nudges before flights board, when prices drop, or when a booking needs your attention."
             )
         }
     }
@@ -85,7 +91,7 @@ struct OnboardingView: View {
                 .font(LumoFonts.caption.weight(.semibold))
                 .tracking(1.4)
                 .foregroundStyle(LumoColors.labelTertiary)
-            Text("Try saying \"plan a weekend trip to Vegas\" or \"order Thai for dinner\". Lumo will ask what it needs as it goes.")
+            Text("Try saying \"plan a weekend trip to Vegas\" or \"order Thai for dinner\". Orchet will ask what it needs as it goes.")
                 .font(LumoFonts.body)
                 .foregroundStyle(LumoColors.labelSecondary)
                 .fixedSize(horizontal: false, vertical: true)

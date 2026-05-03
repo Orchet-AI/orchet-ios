@@ -39,11 +39,11 @@ struct MessageBubble: View {
         .contextMenu { menu }
     }
 
-    /// Small "Lumo" label that sits above each assistant message.
-    /// Matches web's `<div>Lumo</div>` row above the prose body.
+    /// Small "Orchet" label that sits above each assistant message.
+    /// Matches web's `<div>Orchet</div>` row above the prose body.
     private var assistantHeader: some View {
         HStack(spacing: LumoSpacing.xs) {
-            Text("Lumo")
+            Text(Brand.name)
                 .font(LumoFonts.caption.weight(.medium))
                 .foregroundStyle(LumoColors.labelTertiary)
                 .textCase(.uppercase)

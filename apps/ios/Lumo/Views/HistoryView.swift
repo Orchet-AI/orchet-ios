@@ -454,7 +454,7 @@ struct HistoryTripDetail: View {
         case "draft", "confirmed":
             return "Nothing has been booked yet, but the cancel intent will be recorded."
         case "dispatching":
-            return "Lumo is booking this trip right now. Cancelling stops it at the next leg boundary and rolls back any committed legs."
+            return "Orchet is booking this trip right now. Cancelling stops it at the next leg boundary and rolls back any committed legs."
         case "committed":
             return "This trip is already booked. Cancelling runs a refund through each provider where possible."
         default:

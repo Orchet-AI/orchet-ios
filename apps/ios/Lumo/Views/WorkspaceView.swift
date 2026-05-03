@@ -14,7 +14,7 @@ struct WorkspaceView: View {
             Text("Workspace")
                 .font(LumoFonts.title)
                 .foregroundStyle(LumoColors.label)
-            Text("Today, Content, Inbox, Co-pilot, and Operations land here. The web dashboard is at lumo.rentals/workspace; the iOS view ships in a follow-up sprint.")
+            Text("Today, Content, Inbox, Co-pilot, and Operations land here. The web dashboard is at \(Brand.domain)/workspace; the iOS view ships in a follow-up sprint.")
                 .font(LumoFonts.body)
                 .foregroundStyle(LumoColors.labelSecondary)
                 .multilineTextAlignment(.center)

@@ -126,7 +126,7 @@ struct RootView: View {
         ZStack {
             NavigationStack(path: $path) {
                 chatRoot
-                    .navigationTitle("Lumo")
+                    .navigationTitle(Brand.name)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
@@ -151,7 +151,7 @@ struct RootView: View {
             )
         }
         .confirmationDialog(
-            "Sign out of Lumo?",
+            "Sign out of \(Brand.name)?",
             isPresented: $showSignOutConfirm,
             titleVisibility: .visible
         ) {

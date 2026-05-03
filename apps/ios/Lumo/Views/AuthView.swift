@@ -58,9 +58,17 @@ struct AuthView: View {
                     .foregroundStyle(LumoColors.cyan)
             }
 
-            Text("Welcome to Lumo")
+            // Welcome screen carries the "(formerly Lumo)" parenthetical for
+            // ~60 days per REBRAND-LUMO-TO-ORCHET-1, then the parenthetical
+            // gets dropped. The product name is just "Orchet" everywhere else.
+            Text("Welcome to Orchet")
                 .font(LumoFonts.largeTitle)
                 .foregroundStyle(LumoColors.label)
+                .multilineTextAlignment(.center)
+
+            Text("(formerly Lumo)")
+                .font(LumoFonts.caption)
+                .foregroundStyle(LumoColors.labelTertiary)
                 .multilineTextAlignment(.center)
 
             Text("Plan trips, find restaurants, and book everything in one conversation.")
@@ -153,7 +161,7 @@ struct AuthView: View {
 
     private var footerSection: some View {
         VStack(spacing: LumoSpacing.xs) {
-            Text("By continuing, you agree to Lumo's terms of service and privacy policy.")
+            Text("By continuing, you agree to Orchet's terms of service and privacy policy.")
                 .font(LumoFonts.caption)
                 .foregroundStyle(LumoColors.labelTertiary)
                 .multilineTextAlignment(.center)

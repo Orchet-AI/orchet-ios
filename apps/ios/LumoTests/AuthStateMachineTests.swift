@@ -147,7 +147,7 @@ final class AuthStateMachineTests: XCTestCase {
     func test_lumoUser_nameOrEmailPrefix_fallsBackThroughChain() {
         XCTAssertEqual(LumoUser(id: "x", email: "alice@b.c", displayName: "Alice").nameOrEmailPrefix, "Alice")
         XCTAssertEqual(LumoUser(id: "x", email: "alice@b.c", displayName: nil).nameOrEmailPrefix, "alice")
-        XCTAssertEqual(LumoUser(id: "x", email: nil, displayName: "").nameOrEmailPrefix, "Lumo user")
+        XCTAssertEqual(LumoUser(id: "x", email: nil, displayName: "").nameOrEmailPrefix, "Orchet user")
     }
 }
 

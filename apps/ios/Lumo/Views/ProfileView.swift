@@ -14,7 +14,7 @@ struct ProfileView: View {
     var body: some View {
         Form {
             Section {
-                TextField("How should Lumo refer to you?", text: $displayName)
+                TextField("How should Orchet refer to you?", text: $displayName)
                     .textInputAutocapitalization(.words)
                     .onChange(of: displayName) { _, new in
                         ProfileSettings.displayName = new
@@ -49,7 +49,7 @@ struct ProfileView: View {
             } header: {
                 Text("Travel")
             } footer: {
-                Text("Lumo will favor these when planning trips. Say \"book me business class\" in chat to override for one trip.")
+                Text("Orchet will favor these when planning trips. Say \"book me business class\" in chat to override for one trip.")
             }
         }
         .navigationTitle("Profile")

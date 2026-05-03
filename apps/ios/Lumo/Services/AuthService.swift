@@ -44,7 +44,7 @@ struct LumoUser: Equatable {
     var nameOrEmailPrefix: String {
         if let name = displayName, !name.isEmpty { return name }
         if let email, let prefix = email.split(separator: "@").first { return String(prefix) }
-        return "Lumo user"
+        return "\(Brand.name) user"
     }
 }
 
@@ -249,7 +249,7 @@ final class AuthService: AuthServicing {
     func unlockWithBiometric() async throws {
         guard case .needsBiometric(let user) = state else { return }
         let kind = biometric.biometryKind().label
-        let unlocked = try await biometric.authenticate(reason: "Unlock Lumo with \(kind)")
+        let unlocked = try await biometric.authenticate(reason: "Unlock \(Brand.name) with \(kind)")
         if unlocked { state = .signedIn(user) }
     }
 
