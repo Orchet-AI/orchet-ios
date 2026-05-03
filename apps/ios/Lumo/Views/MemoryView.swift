@@ -100,7 +100,7 @@ struct MemoryView: View {
                 patternsSection
 
                 if !viewModel.facts.isEmpty || !viewModel.patterns.isEmpty {
-                    Text("Soft-deleted facts are recoverable for 30 days. To permanently erase everything Lumo knows about you, email support.")
+                    Text("Soft-deleted facts are recoverable for 30 days. To permanently erase everything Orchet knows about you, email support.")
                         .font(LumoFonts.caption)
                         .foregroundStyle(LumoColors.labelTertiary)
                         .padding(.top, LumoSpacing.xs)
@@ -117,7 +117,7 @@ struct MemoryView: View {
         if !viewModel.facts.isEmpty {
             VStack(alignment: .leading, spacing: LumoSpacing.sm) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("What Lumo remembers")
+                    Text("What Orchet remembers")
                         .font(LumoFonts.headline)
                         .foregroundStyle(LumoColors.label)
                     Spacer()
@@ -456,7 +456,7 @@ private struct MemoryFactRow: View {
             Button("Cancel", role: .cancel) {}
             Button("Forget", role: .destructive) { onForget() }
         } message: {
-            Text("Lumo will stop using \"\(fact.fact)\" in chat.")
+            Text("Orchet will stop using \"\(fact.fact)\" in chat.")
         }
     }
 }

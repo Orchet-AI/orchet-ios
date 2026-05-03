@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Lumo</string>
+	<string>Orchet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,11 +67,11 @@
 	<key>LumoAPNsUseSandbox</key>
 	<string>$(LUMO_APNS_USE_SANDBOX)</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Lumo uses your microphone so you can talk to your assistant. Your voice is processed on-device for transcription; nothing is recorded or stored.</string>
+	<string>Orchet uses your microphone so you can talk to your assistant. Your voice is processed on-device for transcription; nothing is recorded or stored.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Lumo uses on-device speech recognition to turn your voice into the messages you send. Transcripts are processed locally; only the resulting text is sent to Lumo.</string>
+	<string>Orchet uses on-device speech recognition to turn your voice into the messages you send. Transcripts are processed locally; only the resulting text is sent to Orchet.</string>
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>Lumo notifies you about trip updates, proactive suggestions, and payment receipts. You can customize categories in Settings.</string>
+	<string>Orchet notifies you about trip updates, proactive suggestions, and payment receipts. You can customize categories in Settings.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -84,9 +84,15 @@
 	</array>
 	<!--
 	  AUTH-OAUTH-1b URL schemes:
-	  - lumo://auth/callback        — Supabase OAuth callback target.
+	  - lumo://auth/callback        — legacy Supabase OAuth callback. Kept
+	                                   alongside `orchet` for one release
+	                                   per REBRAND-LUMO-TO-ORCHET-1 so
+	                                   in-flight OAuth sessions still
+	                                   resume cleanly after the rename.
+	  - orchet://auth/callback      — new Supabase OAuth callback target.
 	                                   ASWebAuthenticationSession matches
-	                                   on `lumo` and resumes our session.
+	                                   on either scheme and resumes the
+	                                   session.
 	  - com.googleusercontent.apps.971943870024-97g5erdstdg2ue3ho4skr4126e4sovkr
 	                                — Google Sign-In reversed-client-ID,
 	                                   registered for compatibility with
@@ -104,6 +110,7 @@
 			<string>com.lumo.rentals.ios.auth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>orchet</string>
 				<string>lumo</string>
 			</array>
 		</dict>

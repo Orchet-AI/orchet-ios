@@ -126,7 +126,7 @@ struct SideDrawerView: View {
 
     private var header: some View {
         HStack {
-            Text("Lumo")
+            Text(Brand.name)
                 .font(LumoFonts.title)
                 .foregroundStyle(LumoColors.label)
             Spacer()

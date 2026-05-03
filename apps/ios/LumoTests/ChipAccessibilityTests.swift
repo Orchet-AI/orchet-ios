@@ -15,7 +15,7 @@ import XCTest
 ///
 ///   • Chip:     "Next weekend, button. Sends as your reply.
 ///                Double-tap to activate."
-///   • Composer: "Ask Lumo to book a flight, order dinner, plan a
+///   • Composer: "Ask Orchet to book a flight, order dinner, plan a
 ///                trip. Or pick a suggestion above. Text field."
 ///
 /// Tests assert the constituent strings + identifiers — manual
@@ -78,8 +78,8 @@ final class ChipAccessibilityTests: XCTestCase {
         // and chip-tap paths so a VoiceOver user understands the
         // chip strip above is a valid alternative. Locked at the
         // string level here.
-        let canonicalLabel = "Ask Lumo to book a flight, order dinner, plan a trip. Or pick a suggestion above."
-        XCTAssertTrue(canonicalLabel.contains("Ask Lumo"),
+        let canonicalLabel = "Ask Orchet to book a flight, order dinner, plan a trip. Or pick a suggestion above."
+        XCTAssertTrue(canonicalLabel.contains("Ask Orchet"),
                       "label must include the free-text invitation")
         XCTAssertTrue(canonicalLabel.contains("suggestion above"),
                       "label must signal the chip-tap path (the strip lives above the composer)")

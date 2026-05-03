@@ -61,7 +61,7 @@ struct McpConnectSheet: View {
                 }
 
                 Section {
-                    Text("Developer preview. Tokens are stored on Lumo's servers and attached to every call to \(agent.display_name). You can revoke it anytime from Connections.")
+                    Text("Developer preview. Tokens are stored on Orchet's servers and attached to every call to \(agent.display_name). You can revoke it anytime from Connections.")
                         .font(LumoFonts.caption)
                         .foregroundStyle(LumoColors.labelTertiary)
                         .fixedSize(horizontal: false, vertical: true)

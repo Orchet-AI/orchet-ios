@@ -39,6 +39,6 @@ struct TypingIndicator: View {
             }
         }
         .onReceive(timer) { _ in phase = (phase + 1) % 3 }
-        .accessibilityLabel("Lumo is typing")
+        .accessibilityLabel("\(Brand.name) is typing")
     }
 }

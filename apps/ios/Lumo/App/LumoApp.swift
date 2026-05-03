@@ -1,5 +1,30 @@
 import SwiftUI
 
+/// Single source of truth for user-visible brand identity. Mirrors the
+/// web `apps/web/lib/brand.ts` and the Python `apps/ml-service/lumo_ml/
+/// brand.py`. Use `Brand.name` everywhere copy currently has the literal
+/// so the next rename is a one-line change.
+///
+/// Notes:
+/// - `legalName` intentionally stays "Lumo Technologies, Inc." — the
+///   parent company isn't being renamed in this lane
+///   (REBRAND-LUMO-TO-ORCHET-1). Orchet and Lumo Rentals are sibling
+///   products under that parent.
+/// - `wakeWordAliases` keeps "Lumo" so the runtime detector still
+///   accepts the old wake word for one release.
+///
+/// Co-located in LumoApp.swift to avoid an Xcode project file edit;
+/// promote to `Brand.swift` once the project graph is touched for
+/// another reason.
+enum Brand {
+    static let name: String = "Orchet"
+    static let legalName: String = "Lumo Technologies, Inc."
+    static let domain: String = "orchet.ai"
+    static let wakeWordCanonical: String = "Orchet"
+    static let wakeWordAliases: [String] = ["Lumo"]
+    static let supportEmail: String = "support@orchet.ai"
+}
+
 @main
 struct LumoApp: App {
     @UIApplicationDelegateAdaptor(LumoAppDelegate.self) private var appDelegate

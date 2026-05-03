@@ -51,9 +51,9 @@ final class VoiceComposerViewModel: ObservableObject {
         var userMessage: String {
             switch self {
             case .microphone:
-                return "Lumo needs microphone access. Open Settings to enable."
+                return "Orchet needs microphone access. Open Settings to enable."
             case .speechRecognition:
-                return "Lumo needs speech-recognition access. Open Settings to enable."
+                return "Orchet needs speech-recognition access. Open Settings to enable."
             case .restricted:
                 return "Speech recognition is restricted on this device."
             }

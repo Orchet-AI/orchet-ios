@@ -60,7 +60,7 @@ struct ConnectionsView: View {
             Text("No connections yet")
                 .font(LumoFonts.title)
                 .foregroundStyle(LumoColors.label)
-            Text("Apps you connect to Lumo from Marketplace will appear here.")
+            Text("Apps you connect to Orchet from Marketplace will appear here.")
                 .font(LumoFonts.body)
                 .foregroundStyle(LumoColors.labelSecondary)
                 .multilineTextAlignment(.center)
@@ -193,7 +193,7 @@ private struct ConnectionRow: View {
             Button("Keep connected", role: .cancel) {}
             Button("Disconnect", role: .destructive, action: onDisconnect)
         } message: {
-            Text("Lumo will lose access to this app. You can reconnect later from Marketplace.")
+            Text("Orchet will lose access to this app. You can reconnect later from Marketplace.")
         }
     }
 

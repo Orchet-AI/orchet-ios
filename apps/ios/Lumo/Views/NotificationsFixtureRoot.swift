@@ -78,7 +78,7 @@ struct NotificationsFixtureRoot: View {
                 Text("Turn on notifications")
                     .font(LumoFonts.largeTitle)
                     .foregroundStyle(LumoColors.label)
-                Text("So Lumo can let you know about trip updates, proactive suggestions, and payment receipts. You can customize which categories notify you in Settings.")
+                Text("So Orchet can let you know about trip updates, proactive suggestions, and payment receipts. You can customize which categories notify you in Settings.")
                     .font(LumoFonts.body)
                     .foregroundStyle(LumoColors.labelSecondary)
                     .multilineTextAlignment(.center)
@@ -125,7 +125,7 @@ struct NotificationsFixtureRoot: View {
                     Image(systemName: "sparkles")
                         .font(.system(size: 48, weight: .light))
                         .foregroundStyle(LumoColors.labelTertiary)
-                    Text("Ask Lumo anything")
+                    Text("Ask Orchet anything")
                         .font(LumoFonts.title)
                         .foregroundStyle(LumoColors.label)
                     Text("Trips, food, errands, anything you'd ask a great assistant.")
@@ -136,7 +136,7 @@ struct NotificationsFixtureRoot: View {
                 }
             }
         }
-        .navigationTitle("Lumo")
+        .navigationTitle(Brand.name)
         .navigationBarTitleDisplayMode(.inline)
     }
 

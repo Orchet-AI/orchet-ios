@@ -66,7 +66,7 @@ struct TripsView: View {
             Text("No trips yet")
                 .font(LumoFonts.title)
                 .foregroundStyle(LumoColors.label)
-            Text("Trips you book through Lumo will appear here. Try saying \"plan a trip to Vegas\" to get started.")
+            Text("Trips you book through Orchet will appear here. Try saying \"plan a trip to Vegas\" to get started.")
                 .font(LumoFonts.body)
                 .foregroundStyle(LumoColors.labelSecondary)
                 .multilineTextAlignment(.center)

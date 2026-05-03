@@ -161,7 +161,7 @@ struct CompoundLegDetailContent: View {
     private var manualReviewContent: some View {
         labeledLine(
             label: "MANUAL REVIEW",
-            text: "Awaiting manual review — the Lumo team will follow up shortly.",
+            text: "Awaiting manual review — the Orchet team will follow up shortly.",
             tone: .warning
         )
         if let reason = (metadata.evidence?["reason"]) {
@@ -343,7 +343,7 @@ struct CompoundLegDetailContent: View {
         case .rolled_back:
             return "This leg was rolled back as part of a saga compensation; the booking did not commit."
         case .rollback_failed:
-            return "Compensating rollback could not complete — escalated to the Lumo team."
+            return "Compensating rollback could not complete — escalated to the Orchet team."
         default:
             return ""
         }

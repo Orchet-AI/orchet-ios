@@ -28,7 +28,7 @@ enum NotificationCategory: String, CaseIterable, Codable {
         case .tripUpdate:
             return "Flight, hotel, and ground status as your trip executes."
         case .proactiveSuggestion:
-            return "Surface trip ideas and ways Lumo can help on session boundaries."
+            return "Surface trip ideas and ways Orchet can help on session boundaries."
         case .paymentReceipt:
             return "Receipts after a payment lands."
         case .alert:
