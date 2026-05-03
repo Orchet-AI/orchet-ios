@@ -1,6 +1,6 @@
-# Lumo Super Agent
+# Orchet Super Agent
 
-The orchestrator. Chat-first, voice-next. Runs the Claude tool-use loop,
+The orchestrator behind Orchet (formerly Lumo). Chat-first, voice-next. Runs the Claude tool-use loop,
 loads the agent registry from `config/agents.registry.json` on boot, and
 dispatches each tool call to the matching specialist agent over HTTP.
 
