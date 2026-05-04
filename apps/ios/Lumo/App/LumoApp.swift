@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Single source of truth for user-visible brand identity. Mirrors the
-/// web `apps/web/lib/brand.ts` and the Python `apps/ml-service/lumo_ml/
+/// web `apps/web/lib/brand.ts` and the Python `services/ml-brain/lumo_ml/
 /// brand.py`. Use `Brand.name` everywhere copy currently has the literal
 /// so the next rename is a one-line change.
 ///
