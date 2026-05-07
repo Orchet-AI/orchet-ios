@@ -523,21 +523,22 @@ struct MemoryProfilePatchDTO: Codable, Equatable {
 
 final class DrawerScreensClient: DrawerScreensFetching {
     /// Legacy apps/web `/api/*` BFF base — used by routes that have
-    /// not yet flipped to gateway-direct in the P2H migration.
+    /// not yet flipped to gateway-direct in the P2H migration, AND as
+    /// the fallback when `gatewayBaseURL` is nil.
     private let baseURL: URL
     /// Gateway base — used by routes migrated to canonical Orchet
-    /// paths (no `api/` prefix). Fed from `AppConfig.gatewayBaseURL`,
-    /// which falls back to `apiBaseURL` until ops populates the new
-    /// Info.plist key, so this client behaves identically to the
-    /// pre-P2H build until that flip.
-    private let gatewayBaseURL: URL
+    /// paths (no `api/` prefix). Nil until ops populates Info.plist's
+    /// `OrchetGatewayBase`; nil means "fall back to apiBaseURL with
+    /// `api/<x>` prefix", so this client behaves identically to the
+    /// pre-P2H build until ops flips that switch.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
 
     init(
         baseURL: URL,
-        gatewayBaseURL: URL,
+        gatewayBaseURL: URL?,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSession = .shared
@@ -549,19 +550,33 @@ final class DrawerScreensClient: DrawerScreensFetching {
         self.accessTokenProvider = accessTokenProvider
     }
 
+    /// Resolves a migrated path against gatewayBaseURL when set,
+    /// falling back to apiBaseURL with the legacy `api/` prefix
+    /// otherwise. Used by P2H-migrated methods so they round-trip
+    /// safely on builds where ops hasn't populated OrchetGatewayBase
+    /// yet.
+    private func gatewayURL(for path: String) -> URL {
+        if let gw = gatewayBaseURL {
+            return gw.appendingPathComponent(path)
+        }
+        return baseURL.appendingPathComponent("api/\(path)")
+    }
+
+    /// Same as `gatewayURL(for:)` but returns the base URL itself,
+    /// for callers that build the URL via `URL(string:relativeTo:)`
+    /// (e.g. paths with query strings).
+    private func gatewayBaseOrLegacy() -> (base: URL, prefix: String) {
+        if let gw = gatewayBaseURL { return (gw, "") }
+        return (baseURL, "api/")
+    }
+
     func fetchMemory() async throws -> MemoryResponseDTO {
         try await get(path: "api/memory", as: MemoryResponseDTO.self)
     }
 
     func fetchMarketplace() async throws -> MarketplaceResponseDTO {
-        // P2H-1: gateway-direct. Falls back to apiBaseURL/api/marketplace
-        // when AppConfig.gatewayBaseURL is unset (Info.plist
-        // OrchetGatewayBase empty), via the AppConfig fallback.
-        try await get(
-            path: "marketplace",
-            base: gatewayBaseURL,
-            as: MarketplaceResponseDTO.self
-        )
+        // P2H-1: gateway-direct when configured, else apps/web BFF.
+        try await getViaGateway(path: "marketplace", as: MarketplaceResponseDTO.self)
     }
 
     func fetchHistory(limitSessions: Int = 30) async throws -> HistoryResponseDTO {
@@ -581,7 +596,14 @@ final class DrawerScreensClient: DrawerScreensFetching {
     func connectMcpServer(serverID: String, accessToken: String) async throws {
         guard !serverID.isEmpty else { throw DrawerScreensError.transport("missing server id") }
         guard !accessToken.isEmpty else { throw DrawerScreensError.transport("missing access token") }
-        let url = baseURL.appendingPathComponent("api/mcp/connections")
+        // P2H-2: gateway-direct when configured, else apps/web BFF.
+        // svc-mcp-client expects body field `bearer_token` (per
+        // services/mcp-client/src/routes/connections.ts); the
+        // apps/web /api/mcp/connections compat proxy accepts both
+        // `access_token` and `bearer_token`, so emitting
+        // `bearer_token` works on both paths. The Swift parameter
+        // name `accessToken` stays for caller-API stability.
+        let url = gatewayURL(for: "mcp/connections")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -594,7 +616,7 @@ final class DrawerScreensClient: DrawerScreensFetching {
         }
         let body: [String: Any] = [
             "server_id": serverID,
-            "access_token": accessToken,
+            "bearer_token": accessToken,
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -636,18 +658,14 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchConnections() async throws -> ConnectionsResponseDTO {
-        // P2H-1: gateway-direct.
-        try await get(
-            path: "connections",
-            base: gatewayBaseURL,
-            as: ConnectionsResponseDTO.self
-        )
+        // P2H-1: gateway-direct when configured, else apps/web BFF.
+        try await getViaGateway(path: "connections", as: ConnectionsResponseDTO.self)
     }
 
     func disconnectConnection(id: String) async throws {
         guard !id.isEmpty else { throw DrawerScreensError.transport("missing connection id") }
-        // P2H-1: gateway-direct.
-        let url = gatewayBaseURL.appendingPathComponent("connections/disconnect")
+        // P2H-1: gateway-direct when configured, else apps/web BFF.
+        let url = gatewayURL(for: "connections/disconnect")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -816,15 +834,27 @@ final class DrawerScreensClient: DrawerScreensFetching {
 
     // MARK: - Helpers
 
-    private func get<T: Decodable>(
-        path: String,
-        base: URL? = nil,
-        as: T.Type
-    ) async throws -> T {
-        let actualBase = base ?? baseURL
-        guard let url = URL(string: path, relativeTo: actualBase) else {
+    /// Plain `GET` against the apps/web BFF (legacy `api/<x>` path).
+    private func get<T: Decodable>(path: String, as: T.Type) async throws -> T {
+        guard let url = URL(string: path, relativeTo: baseURL) else {
             throw DrawerScreensError.transport("invalid url path: \(path)")
         }
+        return try await sendGet(url: url, as: T.self)
+    }
+
+    /// `GET` against the gateway when configured, else falling back
+    /// to the apps/web BFF with an `api/` prefix. Path argument is
+    /// the gateway path (no `api/` prefix); when falling back, this
+    /// function adds the prefix automatically.
+    private func getViaGateway<T: Decodable>(path: String, as: T.Type) async throws -> T {
+        let (base, prefix) = gatewayBaseOrLegacy()
+        guard let url = URL(string: "\(prefix)\(path)", relativeTo: base) else {
+            throw DrawerScreensError.transport("invalid url path: \(path)")
+        }
+        return try await sendGet(url: url, as: T.self)
+    }
+
+    private func sendGet<T: Decodable>(url: URL, as: T.Type) async throws -> T {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Accept")

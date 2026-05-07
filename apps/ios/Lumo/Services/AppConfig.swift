@@ -21,14 +21,14 @@ struct AppConfig {
     /// (`/marketplace`, `/connections`, `/payments`, `/memory`, etc.)
     /// without the legacy `api/...` apps/web compatibility prefix.
     ///
-    /// Migration sequence (P2H-ios-gateway): each service file flips
-    /// from `apiBaseURL.appendingPathComponent("api/<x>")` to
-    /// `gatewayBaseURL.appendingPathComponent("<x>")` one batch at a
-    /// time. Until ops edits Info.plist's `OrchetGatewayBase` to a
-    /// real URL, this falls back to `apiBaseURL` so the migrated
-    /// service still resolves (apps/web's BFF proxies remain in place
-    /// for that very fallback window).
-    let gatewayBaseURL: URL
+    /// `nil` until ops populates Info.plist's `OrchetGatewayBase`.
+    /// Migrated callers (P2H batches) MUST handle the nil case by
+    /// falling back to `apiBaseURL.appendingPathComponent("api/<x>")`.
+    /// Once gatewayBaseURL is non-nil, those callers flip to
+    /// `gatewayBaseURL.appendingPathComponent("<x>")` (no `api/`
+    /// prefix). This keeps fresh-clone / pre-config builds working
+    /// against apps/web BFFs while the gateway rollout completes.
+    let gatewayBaseURL: URL?
     let supabaseURL: URL?
     let supabaseAnonKey: String
     let stripePublishableKey: String
@@ -63,13 +63,14 @@ struct AppConfig {
         let apiURL = URL(string: apiRaw) ?? URL(string: "http://localhost:3000")!
 
         // Gateway base URL — ops populates Info.plist's
-        // `OrchetGatewayBase` once gateway is reachable for the iOS
-        // build. Empty / missing value falls back to apiURL so
-        // unmigrated builds keep hitting apps/web /api/* unchanged.
+        // `OrchetGatewayBase` once the gateway is reachable for the
+        // iOS build. Empty / missing → nil so migrated callers know
+        // to keep using apps/web's `api/*` BFF proxies until the
+        // gateway is plumbed.
         let gatewayRaw = bundle.object(forInfoDictionaryKey: "OrchetGatewayBase") as? String ?? ""
-        let gatewayURL = !gatewayRaw.isEmpty
-            ? (URL(string: gatewayRaw) ?? apiURL)
-            : apiURL
+        let gatewayURL: URL? = !gatewayRaw.isEmpty
+            ? URL(string: gatewayRaw)
+            : nil
 
         // URL is split scheme/host in Info.plist because xcconfig
         // truncates at `//`. Reassemble here.

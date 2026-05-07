@@ -37,7 +37,7 @@ struct NotificationsFixtureRoot: View {
         self.cache = cache
         self.appConfig = AppConfig(
             apiBaseURL: URL(string: "http://localhost:0")!,
-            gatewayBaseURL: URL(string: "http://localhost:0")!,
+            gatewayBaseURL: nil,
             supabaseURL: nil,
             supabaseAnonKey: "",
             stripePublishableKey: "pk_test_fixture",

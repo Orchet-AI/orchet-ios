@@ -112,7 +112,7 @@ final class GoogleSignInTests: XCTestCase {
     func test_authService_throwsNotConfigured_whenSupabaseEnvMissing() async {
         let unconfigured = AppConfig(
             apiBaseURL: URL(string: "http://localhost:3000")!,
-            gatewayBaseURL: URL(string: "http://localhost:3000")!,
+            gatewayBaseURL: nil,
             supabaseURL: nil,
             supabaseAnonKey: "",
             stripePublishableKey: "",
