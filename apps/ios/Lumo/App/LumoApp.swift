@@ -65,6 +65,7 @@ struct LumoApp: App {
 
         self.chatService = ChatService(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userID,
             accessTokenProvider: token
         )

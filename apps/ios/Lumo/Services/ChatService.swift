@@ -30,17 +30,39 @@ enum ChatServiceError: Error, LocalizedError {
 
 final class ChatService {
     private let baseURL: URL
+    /// Gateway base — non-nil flips POST /chat to gateway-direct.
+    /// Nil falls back to apps/web BFF /api/chat.
+    ///
+    /// **Frame contract verified by inspection (P2H-8, 2026-05-07):**
+    /// - apps/web /api/chat is a thin proxy via @orchet/sdk/orchestrator
+    ///   to services/orchestrator/src/routes/turn.ts.
+    /// - Gateway route-table maps /chat → orchestrator subPath /turn
+    ///   with `streaming: true`.
+    /// - forward.ts auto-detects text/event-stream + pipes upstream
+    ///   bytes verbatim; transfer-encoding/connection/keep-alive/
+    ///   content-length are stripped per HTTP/1.1 hop-by-hop rules.
+    /// - Frame types `text | done | error | selection | summary |
+    ///   assistant_compound_dispatch | assistant_suggestions` are
+    ///   decoded by parseFrame; `mission | tool |
+    ///   assistant_compound_step_update | leg_status | internal`
+    ///   round-trip via .other(type:) for forward-compat.
+    /// Both paths reach the same handler with the same frame
+    /// contract. The gateway-direct path eliminates the apps/web
+    /// proxy hop without changing semantics.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL? = nil,
         userIDProvider: @escaping () -> String? = { nil },
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
         self.session = session
@@ -49,7 +71,9 @@ final class ChatService {
     static func makeFromBundle(_ bundle: Bundle = .main) -> ChatService? {
         let raw = bundle.object(forInfoDictionaryKey: "LumoAPIBase") as? String ?? "http://localhost:3000"
         guard let url = URL(string: raw) else { return nil }
-        return ChatService(baseURL: url)
+        let gatewayRaw = bundle.object(forInfoDictionaryKey: "OrchetGatewayBase") as? String ?? ""
+        let gatewayURL: URL? = !gatewayRaw.isEmpty ? URL(string: gatewayRaw) : nil
+        return ChatService(baseURL: url, gatewayBaseURL: gatewayURL)
     }
 
     func stream(message: String, sessionID: String) -> AsyncThrowingStream<ChatEvent, Error> {
@@ -77,7 +101,13 @@ final class ChatService {
     }
 
     private func makeRequest(message: String, sessionID: String) throws -> URLRequest {
-        let endpoint = baseURL.appendingPathComponent("api/chat")
+        // P2H-8: gateway-direct when configured, else apps/web BFF.
+        let endpoint: URL
+        if let gw = gatewayBaseURL {
+            endpoint = gw.appendingPathComponent("chat")
+        } else {
+            endpoint = baseURL.appendingPathComponent("api/chat")
+        }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
