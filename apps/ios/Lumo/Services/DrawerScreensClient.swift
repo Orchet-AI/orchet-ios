@@ -522,18 +522,28 @@ struct MemoryProfilePatchDTO: Codable, Equatable {
 // MARK: - Concrete client
 
 final class DrawerScreensClient: DrawerScreensFetching {
+    /// Legacy apps/web `/api/*` BFF base — used by routes that have
+    /// not yet flipped to gateway-direct in the P2H migration.
     private let baseURL: URL
+    /// Gateway base — used by routes migrated to canonical Orchet
+    /// paths (no `api/` prefix). Fed from `AppConfig.gatewayBaseURL`,
+    /// which falls back to `apiBaseURL` until ops populates the new
+    /// Info.plist key, so this client behaves identically to the
+    /// pre-P2H build until that flip.
+    private let gatewayBaseURL: URL
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.session = session
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
@@ -544,7 +554,14 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchMarketplace() async throws -> MarketplaceResponseDTO {
-        try await get(path: "api/marketplace", as: MarketplaceResponseDTO.self)
+        // P2H-1: gateway-direct. Falls back to apiBaseURL/api/marketplace
+        // when AppConfig.gatewayBaseURL is unset (Info.plist
+        // OrchetGatewayBase empty), via the AppConfig fallback.
+        try await get(
+            path: "marketplace",
+            base: gatewayBaseURL,
+            as: MarketplaceResponseDTO.self
+        )
     }
 
     func fetchHistory(limitSessions: Int = 30) async throws -> HistoryResponseDTO {
@@ -619,12 +636,18 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchConnections() async throws -> ConnectionsResponseDTO {
-        try await get(path: "api/connections", as: ConnectionsResponseDTO.self)
+        // P2H-1: gateway-direct.
+        try await get(
+            path: "connections",
+            base: gatewayBaseURL,
+            as: ConnectionsResponseDTO.self
+        )
     }
 
     func disconnectConnection(id: String) async throws {
         guard !id.isEmpty else { throw DrawerScreensError.transport("missing connection id") }
-        let url = baseURL.appendingPathComponent("api/connections/disconnect")
+        // P2H-1: gateway-direct.
+        let url = gatewayBaseURL.appendingPathComponent("connections/disconnect")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -793,8 +816,13 @@ final class DrawerScreensClient: DrawerScreensFetching {
 
     // MARK: - Helpers
 
-    private func get<T: Decodable>(path: String, as: T.Type) async throws -> T {
-        guard let url = URL(string: path, relativeTo: baseURL) else {
+    private func get<T: Decodable>(
+        path: String,
+        base: URL? = nil,
+        as: T.Type
+    ) async throws -> T {
+        let actualBase = base ?? baseURL
+        guard let url = URL(string: path, relativeTo: actualBase) else {
             throw DrawerScreensError.transport("invalid url path: \(path)")
         }
         var req = URLRequest(url: url)

@@ -115,6 +115,7 @@ struct LumoApp: App {
         // client hits `/api/{memory,marketplace,history}`.
         let realDrawerClient = DrawerScreensClient(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userID,
             accessTokenProvider: token
         )
