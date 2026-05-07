@@ -184,6 +184,56 @@ final class DrawerScreensClientMemoryTests: XCTestCase {
         }))
     }
 
+    // MARK: - POST /lumo/mission/install (P2H-7)
+
+    func test_p2h7_installAgent_legacyFallback() async throws {
+        let json = #"""
+        {"install":{"id":"i1","status":"installed"},"session_approval":null,"agent":{"agent_id":"lumo-flights"}}
+        """#
+        let session = mockSession([.init(
+            method: "POST",
+            path: "/api/lumo/mission/install",
+            status: 200,
+            body: json
+        )])
+        let client = makeClient(session: session, gatewayBaseURL: nil)
+        _ = try await client.installAgent(id: "lumo-flights")
+        guard let request = DSMemoryURLProtocolMock.recorded.first(where: {
+            $0.url?.path == "/api/lumo/mission/install"
+        }) else {
+            return XCTFail("legacy /api/lumo/mission/install not hit")
+        }
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.headers["Content-Type"], "application/json")
+        guard let bodyData = request.bodyData,
+              let parsed = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        else {
+            return XCTFail("body not parseable JSON")
+        }
+        XCTAssertEqual(parsed["agent_id"] as? String, "lumo-flights")
+        XCTAssertEqual(parsed["user_approved"] as? Bool, true)
+    }
+
+    func test_p2h7_installAgent_gatewayDirect() async throws {
+        let json = #"""
+        {"install":{"id":"i1","status":"installed"},"session_approval":null,"agent":{"agent_id":"lumo-flights"}}
+        """#
+        let session = mockSession([.init(
+            method: "POST",
+            path: "/lumo/mission/install",
+            status: 200,
+            body: json
+        )])
+        let client = makeClient(
+            session: session,
+            gatewayBaseURL: URL(string: "http://localhost:9999")!
+        )
+        _ = try await client.installAgent(id: "lumo-flights")
+        XCTAssertNotNil(DSMemoryURLProtocolMock.recorded.first(where: {
+            $0.url?.path == "/lumo/mission/install" && $0.httpMethod == "POST"
+        }))
+    }
+
     // MARK: - GET /api/history (BLOCKED — list endpoint missing on orchestrator)
 
     func test_p2h6_fetchHistory_listStillUsesLegacyPath_untilP2J() async throws {

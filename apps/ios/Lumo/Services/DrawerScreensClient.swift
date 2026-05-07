@@ -754,7 +754,14 @@ final class DrawerScreensClient: DrawerScreensFetching {
 
     func installAgent(id: String) async throws -> String {
         guard !id.isEmpty else { throw DrawerScreensError.transport("missing agent id") }
-        let url = baseURL.appendingPathComponent("api/lumo/mission/install")
+        // P2H-7: gateway-direct when configured, else apps/web BFF.
+        // Path keeps the legacy `lumo/` segment because the canonical
+        // backend route is /lumo/mission/install on svc-orchestrator
+        // (not /orchet/mission/install). The Lumo→Orchet rename of
+        // this URL is deferred to the rebrand phase, which has to
+        // coordinate apps/web BFF, gateway prefix, orchestrator
+        // route, and iOS in lock-step.
+        let url = gatewayURL(for: "lumo/mission/install")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
