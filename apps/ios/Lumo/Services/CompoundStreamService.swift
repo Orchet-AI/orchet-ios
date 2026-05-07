@@ -58,17 +58,31 @@ struct CompoundLegStatusUpdate: Equatable {
 
 final class CompoundStreamService {
     private let baseURL: URL
+    /// Gateway base — non-nil flips the SSE subscribe path to
+    /// canonical /compound/transactions/:id/stream on the gateway.
+    /// Nil falls back to apps/web BFF /api/compound/transactions/:id/stream.
+    /// Backend handler lifted in P2J-compound-stream
+    /// (services/orchestrator/src/routes/compound/stream.ts) preserves
+    /// the same SSE frame contract:
+    ///   event: leg_status \n data: <json> \n\n
+    ///   `: heartbeat` comment lines every ~25s
+    ///   `event: error \n data: <json>` on failures
+    ///   stream closes naturally when compound status is terminal
+    private let gatewayBaseURL: URL?
     private let session: URLSession
 
-    init(baseURL: URL, session: URLSession = .shared) {
+    init(baseURL: URL, gatewayBaseURL: URL? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.session = session
     }
 
     static func makeFromBundle(_ bundle: Bundle = .main) -> CompoundStreamService? {
         let raw = bundle.object(forInfoDictionaryKey: "LumoAPIBase") as? String ?? "http://localhost:3000"
         guard let url = URL(string: raw) else { return nil }
-        return CompoundStreamService(baseURL: url)
+        let gatewayRaw = bundle.object(forInfoDictionaryKey: "OrchetGatewayBase") as? String ?? ""
+        let gatewayURL: URL? = !gatewayRaw.isEmpty ? URL(string: gatewayRaw) : nil
+        return CompoundStreamService(baseURL: url, gatewayBaseURL: gatewayURL)
     }
 
     /// Subscribe to per-leg status updates for `compoundTransactionID`.
@@ -126,8 +140,18 @@ final class CompoundStreamService {
     }
 
     private func makeRequest(compoundTransactionID: String) throws -> URLRequest {
-        let path = "api/compound/transactions/\(compoundTransactionID)/stream"
-        let endpoint = baseURL.appendingPathComponent(path)
+        // P2J-compound-stream / P2H-8a: gateway-direct when
+        // configured, else apps/web BFF.
+        let endpoint: URL
+        if let gw = gatewayBaseURL {
+            endpoint = gw.appendingPathComponent(
+                "compound/transactions/\(compoundTransactionID)/stream"
+            )
+        } else {
+            endpoint = baseURL.appendingPathComponent(
+                "api/compound/transactions/\(compoundTransactionID)/stream"
+            )
+        }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "GET"
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
