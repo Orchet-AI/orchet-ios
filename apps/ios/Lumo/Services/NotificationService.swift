@@ -107,6 +107,10 @@ protocol NotificationServicing: AnyObject {
 
 final class NotificationService: NSObject, NotificationServicing {
     private let baseURL: URL
+    /// Gateway base — non-nil means migrated calls (P2H-3) go
+    /// gateway-direct via canonical /notifications/devices paths.
+    /// Nil → fall back to apiBaseURL with `api/` prefix.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
@@ -118,6 +122,7 @@ final class NotificationService: NSObject, NotificationServicing {
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL?,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         environment: String,
@@ -125,6 +130,7 @@ final class NotificationService: NSObject, NotificationServicing {
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.session = session
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
@@ -143,6 +149,7 @@ final class NotificationService: NSObject, NotificationServicing {
         let bundleID = bundle.bundleIdentifier ?? "com.lumo.rentals.ios"
         return NotificationService(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userIDProvider,
             accessTokenProvider: accessTokenProvider,
             environment: env,
@@ -189,10 +196,12 @@ final class NotificationService: NSObject, NotificationServicing {
             "bundleId": bundleID,
             "environment": environment,
         ]
+        // P2H-3: gateway-direct when configured, else apps/web BFF.
         let req = try makeRequest(
-            path: "api/notifications/devices",
+            path: "notifications/devices",
             method: "POST",
-            jsonBody: body
+            jsonBody: body,
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response, expected: 201)
@@ -207,9 +216,11 @@ final class NotificationService: NSObject, NotificationServicing {
               !id.isEmpty else {
             throw NotificationServiceError.notRegistered
         }
+        // P2H-3: gateway-direct when configured, else apps/web BFF.
         let req = try makeRequest(
-            path: "api/notifications/devices/\(id)",
-            method: "DELETE"
+            path: "notifications/devices/\(id)",
+            method: "DELETE",
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
@@ -229,9 +240,20 @@ final class NotificationService: NSObject, NotificationServicing {
     private func makeRequest(
         path: String,
         method: String,
-        jsonBody: [String: Any]? = nil
+        jsonBody: [String: Any]? = nil,
+        viaGateway: Bool = false
     ) throws -> URLRequest {
-        let url = baseURL.appendingPathComponent(path)
+        let url: URL
+        if viaGateway, let gw = gatewayBaseURL {
+            url = gw.appendingPathComponent(path)
+        } else if viaGateway {
+            // Gateway not configured yet; fall back to apps/web BFF
+            // with the legacy `api/` prefix so the migrated call still
+            // resolves until ops fills in OrchetGatewayBase.
+            url = baseURL.appendingPathComponent("api/\(path)")
+        } else {
+            url = baseURL.appendingPathComponent(path)
+        }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

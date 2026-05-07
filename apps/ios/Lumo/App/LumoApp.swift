@@ -73,6 +73,7 @@ struct LumoApp: App {
         // can share the same cached short-lived token. Memory-only.
         let dgToken = DeepgramTokenService(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userID,
             accessTokenProvider: token
         )

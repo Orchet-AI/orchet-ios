@@ -67,6 +67,10 @@ final class DeepgramTokenService: DeepgramTokenServicing {
     static let refreshLeadSeconds: TimeInterval = 10
 
     private let baseURL: URL
+    /// Gateway base — non-nil flips the token mint to the canonical
+    /// `/audio/deepgram-token` route via the gateway. Nil falls back
+    /// to apps/web `/api/audio/deepgram-token`.
+    private let gatewayBaseURL: URL?
     private let session: URLSessionProtocol
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
@@ -77,11 +81,13 @@ final class DeepgramTokenService: DeepgramTokenServicing {
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL? = nil,
         userIDProvider: @escaping () -> String? = { nil },
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSessionProtocol = URLSession.shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
         self.session = session
@@ -121,7 +127,13 @@ final class DeepgramTokenService: DeepgramTokenServicing {
     }
 
     private func mint() async throws -> String {
-        let url = baseURL.appendingPathComponent("api/audio/deepgram-token")
+        // P2H-3: gateway-direct when configured, else apps/web BFF.
+        let url: URL
+        if let gw = gatewayBaseURL {
+            url = gw.appendingPathComponent("audio/deepgram-token")
+        } else {
+            url = baseURL.appendingPathComponent("api/audio/deepgram-token")
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Accept")

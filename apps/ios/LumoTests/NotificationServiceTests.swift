@@ -115,6 +115,7 @@ final class NotificationServiceTests: XCTestCase {
     private func makeService(session: URLSession) -> NotificationService {
         NotificationService(
             baseURL: URL(string: "http://localhost:9999")!,
+            gatewayBaseURL: nil,
             userIDProvider: { "test-user" },
             environment: "sandbox",
             bundleID: "com.lumo.rentals.ios.dev",
