@@ -571,7 +571,8 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchMemory() async throws -> MemoryResponseDTO {
-        try await get(path: "api/memory", as: MemoryResponseDTO.self)
+        // P2H-6b: gateway-direct when configured, else apps/web BFF.
+        try await getViaGateway(path: "memory", as: MemoryResponseDTO.self)
     }
 
     func fetchMarketplace() async throws -> MarketplaceResponseDTO {
@@ -580,6 +581,12 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchHistory(limitSessions: Int = 30) async throws -> HistoryResponseDTO {
+        // BLOCKED_MISSING_GATEWAY_ROUTE: orchestrator does not yet
+        // expose GET /history (sessions+trips list); tracked as
+        // P2J-history-list. Until that lands iOS keeps hitting the
+        // apps/web BFF directly, NOT through the gateway-direct
+        // helper. This is the only memory/history call still on the
+        // legacy path after P2H-6b.
         try await get(path: "api/history?limit_sessions=\(limitSessions)", as: HistoryResponseDTO.self)
     }
 
@@ -587,8 +594,10 @@ final class DrawerScreensClient: DrawerScreensFetching {
         guard !sessionID.isEmpty else {
             throw DrawerScreensError.transport("missing session id")
         }
-        return try await get(
-            path: "api/history/sessions/\(sessionID)/messages",
+        // P2H-6b: gateway-direct when configured, else apps/web BFF.
+        // Backend handler lifted in P2G-6.
+        return try await getViaGateway(
+            path: "history/sessions/\(sessionID)/messages",
             as: SessionMessagesResponseDTO.self
         )
     }
@@ -630,7 +639,8 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func markUserOnboarded(via: String) async throws {
-        let url = baseURL.appendingPathComponent("api/memory/profile")
+        // P2H-6b: gateway-direct when configured, else apps/web BFF.
+        let url = gatewayURL(for: "memory/profile")
         var req = URLRequest(url: url)
         req.httpMethod = "PATCH"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -789,7 +799,8 @@ final class DrawerScreensClient: DrawerScreensFetching {
         guard !id.isEmpty else {
             throw DrawerScreensError.transport("missing fact id")
         }
-        let url = baseURL.appendingPathComponent("api/memory/facts/\(id)")
+        // P2H-6b: gateway-direct when configured, else apps/web BFF.
+        let url = gatewayURL(for: "memory/facts/\(id)")
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -809,7 +820,8 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func updateMemoryProfile(_ patch: MemoryProfilePatchDTO) async throws -> MemoryProfileDTO {
-        let url = baseURL.appendingPathComponent("api/memory/profile")
+        // P2H-6b: gateway-direct when configured, else apps/web BFF.
+        let url = gatewayURL(for: "memory/profile")
         var req = URLRequest(url: url)
         req.httpMethod = "PATCH"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
