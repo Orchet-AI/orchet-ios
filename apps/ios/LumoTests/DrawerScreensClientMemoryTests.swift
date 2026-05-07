@@ -234,13 +234,9 @@ final class DrawerScreensClientMemoryTests: XCTestCase {
         }))
     }
 
-    // MARK: - GET /api/history (BLOCKED — list endpoint missing on orchestrator)
+    // MARK: - GET /history list (P2J-history-list)
 
-    func test_p2h6_fetchHistory_listStillUsesLegacyPath_untilP2J() async throws {
-        // Until P2J-history-list lands, fetchHistory must continue to
-        // hit the apps/web BFF directly, NOT the gateway. Verify the
-        // request URL has the legacy /api/history prefix even when
-        // gatewayBaseURL is set.
+    func test_p2j_fetchHistory_legacyFallback() async throws {
         let json = #"""
         {"sessions":[],"trips":[]}
         """#
@@ -250,17 +246,36 @@ final class DrawerScreensClientMemoryTests: XCTestCase {
             status: 200,
             body: json
         )])
+        let client = makeClient(session: session, gatewayBaseURL: nil)
+        let response = try await client.fetchHistory()
+        XCTAssertEqual(response.sessions.count, 0)
+        XCTAssertEqual(response.trips.count, 0)
+        let recorded = DSMemoryURLProtocolMock.recorded.first(where: { $0.url?.path == "/api/history" })
+        XCTAssertEqual(recorded?.httpMethod, "GET")
+        XCTAssertTrue(recorded?.url?.query?.contains("limit_sessions=30") ?? false,
+                      "default limit_sessions should be in the legacy fallback URL")
+    }
+
+    func test_p2j_fetchHistory_gatewayDirect() async throws {
+        let json = #"""
+        {"sessions":[],"trips":[]}
+        """#
+        let session = mockSession([.init(
+            method: "GET",
+            path: "/history",
+            status: 200,
+            body: json
+        )])
         let client = makeClient(
             session: session,
             gatewayBaseURL: URL(string: "http://localhost:9999")!
         )
         _ = try await client.fetchHistory()
-        XCTAssertNotNil(
-            DSMemoryURLProtocolMock.recorded.first(where: {
-                $0.url?.path == "/api/history"
-            }),
-            "fetchHistory should still hit /api/history; flip to /history only after P2J-history-list lands"
-        )
+        guard let recorded = DSMemoryURLProtocolMock.recorded.first(where: { $0.url?.path == "/history" }) else {
+            return XCTFail("gateway-direct path /history not hit")
+        }
+        XCTAssertEqual(recorded.httpMethod, "GET")
+        XCTAssertTrue(recorded.url?.query?.contains("limit_sessions=30") ?? false)
     }
 
     // MARK: - Helpers

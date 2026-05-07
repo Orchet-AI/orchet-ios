@@ -581,13 +581,15 @@ final class DrawerScreensClient: DrawerScreensFetching {
     }
 
     func fetchHistory(limitSessions: Int = 30) async throws -> HistoryResponseDTO {
-        // BLOCKED_MISSING_GATEWAY_ROUTE: orchestrator does not yet
-        // expose GET /history (sessions+trips list); tracked as
-        // P2J-history-list. Until that lands iOS keeps hitting the
-        // apps/web BFF directly, NOT through the gateway-direct
-        // helper. This is the only memory/history call still on the
-        // legacy path after P2H-6b.
-        try await get(path: "api/history?limit_sessions=\(limitSessions)", as: HistoryResponseDTO.self)
+        // P2J-history-list: gateway-direct when configured, else
+        // apps/web BFF. svc-orchestrator GET /history was lifted
+        // from apps/web/lib/history.ts in P2J-history-list — same
+        // { sessions, trips } envelope the iOS HistoryResponseDTO
+        // already decodes.
+        try await getViaGateway(
+            path: "history?limit_sessions=\(limitSessions)",
+            as: HistoryResponseDTO.self
+        )
     }
 
     func fetchSessionMessages(sessionID: String) async throws -> SessionMessagesResponseDTO {
