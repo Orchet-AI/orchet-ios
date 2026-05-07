@@ -54,6 +54,12 @@
 	</dict>
 	<key>LumoAPIBase</key>
 	<string>https://lumo-super-agent.vercel.app</string>
+	<!-- Gateway base URL for the P2H iOS migration. Empty default
+	     means migrated services fall back to LumoAPIBase (apps/web
+	     BFF proxies). Ops populates this string when the gateway
+	     deployment is reachable for the iOS build environment. -->
+	<key>OrchetGatewayBase</key>
+	<string></string>
 	<key>LumoSupabaseURLScheme</key>
 	<string>$(LUMO_SUPABASE_URL_SCHEME)</string>
 	<key>LumoSupabaseURLHost</key>

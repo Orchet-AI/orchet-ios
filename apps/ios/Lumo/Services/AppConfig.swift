@@ -17,6 +17,18 @@ import Foundation
 
 struct AppConfig {
     let apiBaseURL: URL
+    /// Gateway base URL for direct calls to canonical Orchet routes
+    /// (`/marketplace`, `/connections`, `/payments`, `/memory`, etc.)
+    /// without the legacy `api/...` apps/web compatibility prefix.
+    ///
+    /// Migration sequence (P2H-ios-gateway): each service file flips
+    /// from `apiBaseURL.appendingPathComponent("api/<x>")` to
+    /// `gatewayBaseURL.appendingPathComponent("<x>")` one batch at a
+    /// time. Until ops edits Info.plist's `OrchetGatewayBase` to a
+    /// real URL, this falls back to `apiBaseURL` so the migrated
+    /// service still resolves (apps/web's BFF proxies remain in place
+    /// for that very fallback window).
+    let gatewayBaseURL: URL
     let supabaseURL: URL?
     let supabaseAnonKey: String
     let stripePublishableKey: String
@@ -50,6 +62,15 @@ struct AppConfig {
         let apiRaw = bundle.object(forInfoDictionaryKey: "LumoAPIBase") as? String ?? "http://localhost:3000"
         let apiURL = URL(string: apiRaw) ?? URL(string: "http://localhost:3000")!
 
+        // Gateway base URL — ops populates Info.plist's
+        // `OrchetGatewayBase` once gateway is reachable for the iOS
+        // build. Empty / missing value falls back to apiURL so
+        // unmigrated builds keep hitting apps/web /api/* unchanged.
+        let gatewayRaw = bundle.object(forInfoDictionaryKey: "OrchetGatewayBase") as? String ?? ""
+        let gatewayURL = !gatewayRaw.isEmpty
+            ? (URL(string: gatewayRaw) ?? apiURL)
+            : apiURL
+
         // URL is split scheme/host in Info.plist because xcconfig
         // truncates at `//`. Reassemble here.
         let scheme = (bundle.object(forInfoDictionaryKey: "LumoSupabaseURLScheme") as? String) ?? ""
@@ -69,6 +90,7 @@ struct AppConfig {
 
         return AppConfig(
             apiBaseURL: apiURL,
+            gatewayBaseURL: gatewayURL,
             supabaseURL: supabaseURL,
             supabaseAnonKey: anonKey,
             stripePublishableKey: stripeKey,
