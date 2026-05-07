@@ -690,7 +690,8 @@ final class DrawerScreensClient: DrawerScreensFetching {
 
     func cancelTrip(id: String, reason: String?) async throws -> CancelTripResultDTO {
         guard !id.isEmpty else { throw DrawerScreensError.transport("missing trip id") }
-        let url = baseURL.appendingPathComponent("api/trip/\(id)/cancel")
+        // P2H-4: gateway-direct when configured, else apps/web BFF.
+        let url = gatewayURL(for: "trip/\(id)/cancel")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -190,17 +190,23 @@ final class NotificationActionHandler: ObservableObject {
 /// accepted status.
 final class NotificationSnoozeClient: NotificationSnoozing {
     private let baseURL: URL
+    /// Gateway base — non-nil flips snooze to gateway-direct
+    /// `/proactive/snooze`. Nil falls back to apps/web BFF
+    /// `/api/proactive/snooze`.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL? = nil,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
         self.session = session
@@ -213,7 +219,13 @@ final class NotificationSnoozeClient: NotificationSnoozing {
             "momentId": momentID,
             "snoozeUntilISO": formatter.string(from: until),
         ]
-        let url = baseURL.appendingPathComponent("api/proactive/snooze")
+        // P2H-4: gateway-direct when configured, else apps/web BFF.
+        let url: URL
+        if let gw = gatewayBaseURL {
+            url = gw.appendingPathComponent("proactive/snooze")
+        } else {
+            url = baseURL.appendingPathComponent("api/proactive/snooze")
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

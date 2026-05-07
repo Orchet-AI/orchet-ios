@@ -58,24 +58,36 @@ protocol ProactiveMomentsFetching: AnyObject {
 
 final class ProactiveMomentsClient: ProactiveMomentsFetching {
     private let baseURL: URL
+    /// Gateway base — non-nil flips fetchRecent to gateway-direct
+    /// `/proactive/recent`. Nil falls back to apps/web BFF
+    /// `/api/proactive/recent`.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL? = nil,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.session = session
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
     }
 
     func fetchRecent() async throws -> ProactiveMomentsResponse {
-        let url = baseURL.appendingPathComponent("api/proactive/recent")
+        // P2H-4: gateway-direct when configured, else apps/web BFF.
+        let url: URL
+        if let gw = gatewayBaseURL {
+            url = gw.appendingPathComponent("proactive/recent")
+        } else {
+            url = baseURL.appendingPathComponent("api/proactive/recent")
+        }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Accept")

@@ -95,6 +95,7 @@ struct LumoApp: App {
         self.proactiveCache = cache
         let client = ProactiveMomentsClient(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userID,
             accessTokenProvider: token
         )
@@ -105,6 +106,7 @@ struct LumoApp: App {
         )
         let snoozer = NotificationSnoozeClient(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userID,
             accessTokenProvider: token
         )
