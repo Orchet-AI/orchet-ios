@@ -1,6 +1,9 @@
 import Foundation
 
-/// HTTP client for `/api/payments/*` plus protocol seam for tests.
+/// HTTP client for the canonical `/payments/*` routes (gateway-direct
+/// when `AppConfig.gatewayBaseURL` is configured) with a fallback to
+/// the legacy apps/web `/api/payments/*` BFF proxies when it is not.
+/// Plus protocol seam for tests.
 ///
 /// In v1 (MOBILE-PAYMENTS-1) the backend is stubbed and this service
 /// drives a synthetic add-card flow. The Stripe PaymentSheet hookup is
@@ -10,6 +13,17 @@ import Foundation
 /// add-card sheet rather than invoking real PaymentSheet (which would
 /// fail without a real client_secret from a server-side Stripe API
 /// call). MERCHANT-1 flips on the real path.
+///
+/// **P2H-5 migration note (2026-05-07):** the five path constants
+/// flipped from `api/payments/*` to canonical `payments/*` and now
+/// route through the gateway when configured. Body shapes, ECDSA
+/// digest encoding, signed-confirmation-token encoding, idempotency
+/// header behaviour, and error parsing are byte-for-byte UNCHANGED.
+/// The gateway forwards bodies verbatim to svc-integrations, which is
+/// the same destination the apps/web BFF proxies. Any change to
+/// confirm-transaction body shape must be reviewed against
+/// `services/integrations/src/routes/payments/confirm-transaction.ts`
+/// first.
 
 // MARK: - Models
 
@@ -164,6 +178,19 @@ protocol PaymentServicing {
 
 final class PaymentService: PaymentServicing {
     private let baseURL: URL
+    /// Gateway base — non-nil flips the five payment routes to the
+    /// canonical `/payments/*` paths via the gateway. Nil falls back
+    /// to apps/web BFF `/api/payments/*` so the migrated code keeps
+    /// working when ops has not yet populated Info.plist's
+    /// `OrchetGatewayBase`.
+    ///
+    /// **Critical:** the request body, ECDSA digest, signed
+    /// confirmation token, idempotency-key behaviour, and error
+    /// parsing are byte-for-byte unchanged across both paths. The
+    /// gateway forwards the body verbatim to svc-integrations, which
+    /// is the same destination the apps/web BFF proxies. The contract
+    /// is identical; only the URL host + path-prefix differ.
+    private let gatewayBaseURL: URL?
     private let session: URLSession
     private let userIDProvider: () -> String?
     private let accessTokenProvider: () -> String?
@@ -171,12 +198,14 @@ final class PaymentService: PaymentServicing {
 
     init(
         baseURL: URL,
+        gatewayBaseURL: URL? = nil,
         userIDProvider: @escaping () -> String?,
         accessTokenProvider: @escaping () -> String? = { nil },
         isConfigured: Bool,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
+        self.gatewayBaseURL = gatewayBaseURL
         self.session = session
         self.userIDProvider = userIDProvider
         self.accessTokenProvider = accessTokenProvider
@@ -190,6 +219,7 @@ final class PaymentService: PaymentServicing {
     ) -> PaymentService {
         PaymentService(
             baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
             userIDProvider: userIDProvider,
             accessTokenProvider: accessTokenProvider,
             isConfigured: config.isStripeConfigured
@@ -198,7 +228,11 @@ final class PaymentService: PaymentServicing {
 
     func createSetupIntent() async throws -> SetupIntentResponse {
         try ensureConfigured()
-        let req = try makeRequest(path: "api/payments/setup-intent", method: "POST")
+        let req = try makeRequest(
+            path: "payments/setup-intent",
+            method: "POST",
+            viaGateway: true
+        )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
         return try decode(SetupIntentResponse.self, from: data)
@@ -213,9 +247,10 @@ final class PaymentService: PaymentServicing {
             "expYear": input.expYear,
         ]
         let req = try makeRequest(
-            path: "api/payments/methods",
+            path: "payments/methods",
             method: "POST",
-            jsonBody: body
+            jsonBody: body,
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response, expected: 201)
@@ -226,7 +261,11 @@ final class PaymentService: PaymentServicing {
 
     func listPaymentMethods() async throws -> [PaymentMethod] {
         try ensureConfigured()
-        let req = try makeRequest(path: "api/payments/methods", method: "GET")
+        let req = try makeRequest(
+            path: "payments/methods",
+            method: "GET",
+            viaGateway: true
+        )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
         struct ListResponse: Codable { let methods: [PaymentMethod] }
@@ -236,8 +275,9 @@ final class PaymentService: PaymentServicing {
     func setDefaultPaymentMethod(id: String) async throws -> PaymentMethod {
         try ensureConfigured()
         let req = try makeRequest(
-            path: "api/payments/methods/\(id)/set-default",
-            method: "POST"
+            path: "payments/methods/\(id)/set-default",
+            method: "POST",
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
@@ -248,8 +288,9 @@ final class PaymentService: PaymentServicing {
     func removePaymentMethod(id: String) async throws {
         try ensureConfigured()
         let req = try makeRequest(
-            path: "api/payments/methods/\(id)",
-            method: "DELETE"
+            path: "payments/methods/\(id)",
+            method: "DELETE",
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
@@ -257,6 +298,14 @@ final class PaymentService: PaymentServicing {
 
     func confirmTransaction(_ input: ConfirmTransactionInput) async throws -> Receipt {
         try ensureConfigured()
+        // Body shape, key names, hex digest encoding, base64 token
+        // encoding, and key ordering are part of the security
+        // contract: the gateway forwards verbatim to svc-integrations,
+        // which re-derives the digest server-side and verifies the
+        // ECDSA signature against the registered iOS device key.
+        // ANY change here must be reviewed against
+        // services/integrations/src/routes/payments/confirm-transaction.ts
+        // first.
         let body: [String: Any] = [
             "paymentMethodId": input.paymentMethodId,
             "amountCents": input.amountCents,
@@ -268,9 +317,10 @@ final class PaymentService: PaymentServicing {
             "signedConfirmationToken": input.signedConfirmationToken.base64EncodedString(),
         ]
         let req = try makeRequest(
-            path: "api/payments/confirm-transaction",
+            path: "payments/confirm-transaction",
             method: "POST",
-            jsonBody: body
+            jsonBody: body,
+            viaGateway: true
         )
         let (data, response) = try await session.data(for: req)
         try ensureOK(data: data, response: response)
@@ -287,9 +337,24 @@ final class PaymentService: PaymentServicing {
     private func makeRequest(
         path: String,
         method: String,
-        jsonBody: [String: Any]? = nil
+        jsonBody: [String: Any]? = nil,
+        viaGateway: Bool = false
     ) throws -> URLRequest {
-        let url = baseURL.appendingPathComponent(path)
+        // P2H-5: gateway-direct when `viaGateway: true` AND
+        // gatewayBaseURL is configured. Otherwise fall back to
+        // apps/web BFF with the legacy `api/` prefix so the call
+        // resolves on builds where ops has not yet populated
+        // OrchetGatewayBase. Body, headers, signature, and error
+        // parsing below are byte-for-byte identical across both
+        // paths — only the URL changes.
+        let url: URL
+        if viaGateway, let gw = gatewayBaseURL {
+            url = gw.appendingPathComponent(path)
+        } else if viaGateway {
+            url = baseURL.appendingPathComponent("api/\(path)")
+        } else {
+            url = baseURL.appendingPathComponent(path)
+        }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
