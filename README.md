@@ -1,187 +1,182 @@
-# Orchet Super Agent
+# orchet-ios
 
-Chat- and voice-first AI assistant. The orchestrator runs a Claude
-tool-use loop, dispatches each tool to a specialist agent over HTTP,
-and coordinates a small set of backend services behind a public
-API gateway.
+The Orchet iOS app — a SwiftUI client that talks to the Orchet
+gateway directly. No backend logic lives here; this repo is the iOS
+shell only.
 
-This monorepo is **mid-split**: the Hybrid topology (per
-[`docs/architecture/decisions/007-topology-freeze.md`](docs/architecture/decisions/007-topology-freeze.md))
-runs all backend code in one Node process today; the planned split
-extracts six independently-deployable repos. Until that split
-lands, treat this repo as the canonical source for all six.
+This repo is one of the post-split Orchet repositories. See
+[Sibling repos](#sibling-repos) below for the full set.
 
-## Read first
-
-If you're modifying code:
-
-1. [`docs/architecture/canonical.md`](docs/architecture/canonical.md) — layer rules, dependency direction, port discipline, migration state. **Non-negotiable.**
-2. [`docs/architecture/runtime-composition.md`](docs/architecture/runtime-composition.md) — composition roots and the rules that prevent runtime DI chaos. Required reading before any wiring / boot work.
-3. [`docs/architecture/decisions/`](docs/architecture/decisions/) — Architecture Decision Records. ADR-007 freezes the topology; new packages, facades, or cross-layer dependencies require a new ADR.
-4. [`CLAUDE.md`](CLAUDE.md) — repo-wide guidance for AI agents working in this codebase.
-
-## Layer model
+## Architecture
 
 ```text
-apps/        — clients (Next.js web, SwiftUI iOS, Docusaurus docs)
-services/    — runtime shells (Express + wiring; no domain logic)
-packages/    — domain logic (transport-agnostic; owns ports)
-infra/       — deploy artifacts (Vercel, Azure, env templates)
-tools/       — repo tooling (eval harnesses, etc.)
-samples/     — reference partner-style sample agents
+iPhone / iPad ─►  apps/ios (this repo)  ─►  Orchet gateway  ─►  services/*
+                                              (sibling repo: orchet-backend)
 ```
 
-Direction of dependency is one-way:
+The gateway URL is configured by the **`OrchetGatewayBase`**
+Info.plist key (set from xcconfig). Production builds populate it;
+the app's `AppConfig.gatewayBaseURL` reads it and every HTTP service
+in `Lumo/Services/*` calls the gateway directly.
 
-```text
-apps  ─►  services  ─►  packages  ─►  packages
-                         (ports)        ▲
-                         adapters ──────┘
-```
+### iOS rollout history (relevant context)
 
-Enforced by `npm run lint:package-deps`.
+- The pre-rollout iOS code had a runtime fallback to `apps/web`
+  `/api/*` BFF proxies when `OrchetGatewayBase` was empty. That
+  rollout cleared on 2026-05-07 (≥99% adoption + 7-day sustain).
+- The web shell has since deleted the 24 IOS_COMPAT routes that
+  served the fallback, so production iOS builds **must** have
+  `OrchetGatewayBase` populated to function.
+- Test fixtures under `LumoTests/*Tests.swift` still mock against
+  the legacy `/api/*` URL shape (5 files, 29 hard-coded `"/api/"`
+  strings). Production code in `Lumo/` has zero hard-coded `"/api/"`
+  strings. The fixtures will be re-pointed to gateway URLs in a
+  follow-up; they don't reach a live network so the legacy URL
+  literals are harmless.
 
-## What lives where (current state)
+### Boundary rules
 
-### `apps/`
-
-| Subfolder | Role |
-| --- | --- |
-| `apps/web/` | **Frontend shell only.** Next.js 14 App Router. UI + presenters + gateway HTTP clients. Zero backend imports. The remaining 20 routes under `apps/web/app/api/` are compatibility/liveness only (provider OAuth callbacks, Vercel cron URL forwarders, health probes) — see `docs/architecture/apps-web-file-retirement-inventory.md`. |
-| `apps/ios/` | SwiftUI app shell. Production builds talk to the gateway directly via `OrchetGatewayBase`; older builds fall back to `apps/web` BFF (now retired post-iOS-gate cleanup). |
-| `apps/docs/` | Docusaurus docs site. Reads docs only. |
-
-### `services/` (all `@orchet/svc-*`)
-
-The public API entrypoint is **`services/gateway/`**. Every external
-client (web, iOS, future Android) hits the gateway; the gateway
-forwards to the appropriate service. Inter-service communication is
-HTTP only, mediated by `@orchet/sdk`.
-
-| Service | Role |
-| --- | --- |
-| `services/gateway/` | Public HTTPS edge. Header-forwarding, auth, route table. |
-| `services/backend/` | Hybrid composition root. Mounts every `@orchet/svc-*` under sub-paths in one Node process. |
-| `services/orchestrator/` | HTTP shell + wiring around `@orchet/domain-orchestrator`. Owns `/chat` (SSE) and mission/trip endpoints. |
-| `services/integrations/` | LLM/STT/TTS providers, OAuth platforms (Google, Microsoft, Meta, Spotify), payments (Stripe). |
-| `services/auth/` | Supabase Auth wrapper, OAuth callbacks, OAuth-token resolver. |
-| `services/notifications/` | Notification outbox + transports (push, websocket, console). |
-| `services/cron/` | Manifest-driven background jobs. 15 jobs across proactive / missions / marketplace / workspace / cost / kg / developer / docs domains. |
-| `services/mcp-client/` | Thin HTTP client to the planned `orchet-mcp` sibling repo (the MCP hub itself doesn't live here). |
-| `services/ml-brain/` | Python FastAPI on Modal. Embeddings, classifier, system-prompt port. |
-
-### `packages/`
-
-Domain logic. Each `@orchet/domain-*` package owns one bounded
-context, exposes its public API via `package.json#exports`, and
-reaches outside the domain only through ports declared in
-`src/ports/index.ts`.
-
-| Package | Owns |
-| --- | --- |
-| `@orchet/domain-orchestrator` | Apex. Claude tool-use loop, tool router, missions, trips, compound dispatch, mesh planner. |
-| `@orchet/domain-router` | Perf cluster — model routing, intent classifier, fast-turn streaming. |
-| `@orchet/domain-agents` | Agent registry, integrations registry, Duffel `MerchantPort`. |
-| `@orchet/domain-integrations` | LLM/STT/TTS provider interfaces + adapters; OAuth platform adapters. |
-| `@orchet/domain-memory` | Memory facts, profile, archive recall, knowledge graph. |
-| `@orchet/domain-marketplace` | Marketplace catalog, submissions, version intelligence, trust pipeline. |
-| `@orchet/domain-auth` | Permissions / runtime-policy / approvals / connections subdomains. |
-| `@orchet/domain-notifications` | Notification ports + delivery. |
-| `@orchet/domain-observability` | Cost accounting, timing spans, telemetry. |
-| `@orchet/domain-autonomy` | Autonomy ports + reasoning. |
-
-Cross-cutting packages:
-
-| Package | Owns |
-| --- | --- |
-| `@orchet/shared-types` | Pydantic-derived TS types (cross-language wire contracts). |
-| `@orchet/shared-utils` | Cross-context primitives (circuit breakers, JWT signing, time helpers). |
-| `@orchet/data-access` | Provider-agnostic DB layer. Supabase adapter today; postgres adapter stub. |
-| `@orchet/db` | Migrations, seeds, `run-all.sql` builder. |
-| `@orchet/sdk` | Typed HTTP client used by `apps/*` and inter-service. |
-| `@orchet/agent-sdk` | Author SDK + CLI for partner-built agents. |
-| `@orchet/logging` | Structured logging facade with pluggable providers. |
-
-## Repo split target
-
-Per [`docs/architecture/repo-split-plan.md`](docs/architecture/repo-split-plan.md), the monorepo splits into six independently-deployable repos once the in-repo cleanup completes:
-
-| Target repo | Contents | Public? |
-| --- | --- | --- |
-| `orchet-backend` | `services/*` + `packages/*` + `infra/` + most of `docs/`. Owns the OpenAPI spec and publishes the SDKs. | private |
-| `orchet-web` | `apps/web/` + the generated `@orchet/sdk-web` + brand consumed via npm. | private |
-| `orchet-ios` | `apps/ios/` + the generated `@orchet/sdk-ios`. | private |
-| `orchet-android` | Stub at split time; mirrors the iOS shape. | private |
-| `orchet-mcp` | Standalone MCP hub. `services/mcp-client/` reaches it via HTTP. | private |
-| `orchet-brand` | Tailwind theme tokens, `OrchetLockup`/`BrandMark`, brand SVGs, design tokens. Published as `@orchet/brand` to a private npm registry. | private npm |
-
-Pre-split gates and the deletion order are tracked in
-[`docs/architecture/compatibility-deletion-runbook.md`](docs/architecture/compatibility-deletion-runbook.md).
-
-## Run locally
-
-```bash
-npm install
-npm run dev           # apps/web on http://localhost:3000
-```
-
-Backend services run from `services/backend` in the Hybrid
-composition (single process, multiple sub-paths) for end-to-end
-smoke runs. Standalone-boot of individual services is partial today
-(see `canonical.md` for status).
-
-The chat flow exercises the gateway → orchestrator → router → agent
-path. Money-moving tools are gated by a confirmation hash; the SDK's
-`hashSummary()` is the single place that hash is computed, so the
-agent and shell cannot drift.
-
-## Operational posture
-
-- **Kill-switch per agent.** Flip `enabled: false` in
-  `packages/domain-agents/src/config/agents.registry*.json`,
-  redeploy — that agent stops being offered to Claude on next cold
-  start.
-- **Health degradation.** The agent registry polls each agent's
-  health URL. Score below threshold → silently dropped from the
-  system prompt until it recovers.
-- **Circuit breaker.** Per-agent breaker in `@orchet/shared-utils`.
-  Consecutive failures trip; further calls return `upstream_error`
-  for N seconds without touching the agent.
-
-## Deploy
-
-- **`apps/web`** → Vercel (Next.js). Root `vercel.json` is the apps/web
-  config.
-- **`services/*`** → Vercel functions today (per `infra/vercel/`)
-  with Azure Container Apps as the planned long-term target (per
-  `infra/azure/main.bicep`). Hybrid topology runs all svc-* in one
-  deploy unit; the per-service `createXApp()` factories let each
-  one extract independently when needed.
-- **`services/ml-brain`** → Modal (Python FastAPI). Separate deploy.
-
-Per-service env templates live in [`infra/env/`](infra/env/).
+- ✅ **Allowed:** Calls to the Orchet gateway (`OrchetGatewayBase`),
+  Supabase (Auth via the SwiftPM `Supabase` SDK), Stripe iOS SDK,
+  Deepgram (token-minted via gateway).
+- ❌ **No new `/api/` calls.** New endpoints belong on the gateway,
+  not on apps/web. The 29 existing legacy strings are test fixtures
+  only.
+- ❌ **No source dependency on the monorepo.** Comments referencing
+  `apps/web/...` paths are documentation context only — they describe
+  where a feature lives in the sibling backend/web repos. There are
+  no actual code imports.
 
 ## Setup
 
-For Supabase setup (one-time, ~15 minutes), see
-[`SUPABASE_SETUP.md`](SUPABASE_SETUP.md).
+You need:
+- macOS with Xcode 17+ (tested with Xcode 26.4.1).
+- `xcodegen` from Homebrew: `brew install xcodegen`.
 
-## Branding
+The Xcode project is **not committed** — it's regenerated from
+`project.yml` by `xcodegen`. Run after cloning (and after any
+`project.yml` edit):
 
-New code uses **Orchet** branding (`@orchet/*`, `ORCHET_*`,
-`orchet-*`). Existing prod env vars (`LUMO_*`) and persisted IDs
-(`lumo-flights`, etc.) stay until coordinated ops migrations — see
-[`docs/architecture/lumo-to-orchet-remaining-references.md`](docs/architecture/lumo-to-orchet-remaining-references.md).
+```sh
+xcodegen generate
+open Lumo.xcodeproj
+```
 
-## Related repos
+## Running against a custom backend
 
-- The MCP hub will live in a sibling repo (`orchet-mcp`); the
-  in-repo `services/mcp-client/` is a thin HTTP client.
-- The author SDK is `@orchet/agent-sdk` (formerly `@lumo/agent-sdk`).
+The app reads two keys from `Info.plist`, both populated from
+xcconfig:
+
+| Key | Purpose |
+| --- | --- |
+| `OrchetGatewayBase` | Gateway base URL — `https://gateway.orchet.app` in production. **Required for any non-local build to reach the backend.** |
+| `LumoAPIBase` | Legacy apps/web BFF URL. Pre-rollout fallback target; not used in production runtime paths anymore. |
+
+Plus the Supabase publics, Stripe test publishable key, and APNs
+sandbox flag (also Info.plist via xcconfig).
+
+For local dev, populate `Lumo.local.xcconfig` (gitignored — never
+commit secrets) and run:
+
+```sh
+xcodegen generate
+xcodebuild test \
+  -project Lumo.xcodeproj \
+  -scheme Lumo \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+### Note on `ios-write-xcconfig.sh`
+
+The pre-split monorepo had `scripts/ios-write-xcconfig.sh` at the
+top level (one script for all engineers' local builds). The split
+left this iOS repo with only `scripts/build-and-deploy-iphone.sh`;
+the xcconfig generator is **not** in this repo today. Until it's
+ported, populate `Lumo.local.xcconfig` manually or rely on the
+empty defaults committed in `Lumo.xcconfig` — the app surfaces a
+clean "auth/payments not configured" state rather than crashing.
+
+Porting the xcconfig generator is a follow-up.
+
+## Test status
+
+`xcodebuild test -project Lumo.xcodeproj -scheme Lumo -destination
+'platform=iOS Simulator,name=iPhone 17 Pro'` builds the app cleanly
+but the test target hits a Swift 6 strict-concurrency compile error
+in `LumoTests/AuthStateMachineTests.swift`:
+
+```
+main actor-isolated instance method 'currentAccessToken()' cannot
+satisfy nonisolated requirement
+```
+
+The `final class FakeAuthService: AuthServicing` conformance is
+`@MainActor` while the protocol's methods are nonisolated. **This
+is a pre-existing source state** (byte-identical to the pre-split
+monorepo's `apps/ios/LumoTests/AuthStateMachineTests.swift`); the
+fix is iOS-team Swift work, not an extraction concern.
+
+Expected fix shapes:
+- Annotate `AuthServicing` protocol with `@MainActor`, OR
+- Use `@preconcurrency` on the `FakeAuthService` conformance, OR
+- Mark conforming method declarations `nonisolated`.
+
+Until that's resolved, run individual non-Auth-related test classes
+via `-only-testing:LumoTests/<SuiteName>` to validate other paths.
+
+## Branding (intentionally Lumo today)
+
+App name, bundle ID, Xcode target/scheme, and directory paths are
+intentionally still `Lumo` / `com.lumo.rentals.*`:
+
+- `name: Lumo` in `project.yml`
+- `bundleIdPrefix: com.lumo.rentals` in `project.yml`
+- `Lumo/` (Swift sources), `LumoTests/`
+- `LumoApp` SwiftUI App struct
+- `Lumo.xcconfig` filename
+
+The rebrand to **Orchet** is **blocked on Apple Developer Portal
+coordination** — provisioning profiles, push certificates, and
+bundle ID re-registration. Once that's resolved, a single
+coordinated commit will rename the project + bundle id + dir paths
++ Xcode files + the `LumoApp` struct atomically. New Orchet
+branding (`OrchetGatewayBase`, `OrchetLockup`, voice catalog
+naming) is already used inside the app where it doesn't cross the
+Apple Developer boundary.
+
+## Project shape
+
+```
+Lumo/                  Swift source: App/, Services/, ViewModels/,
+                       Views/, Models/, Components/, Resources/.
+LumoTests/             XCTest suites (AuthStateMachine, Chat,
+                       CompoundStream, DeepgramToken, DrawerScreens,
+                       Notification, Payment, …).
+docs/                  iOS-specific docs (notes, Deepgram recon).
+scripts/               build-and-deploy-iphone.sh.
+project.yml            xcodegen project definition.
+Lumo.xcconfig          Committed defaults; #include?'s gitignored
+                       Lumo.local.xcconfig for secrets.
+ARCHITECTURE.md        Lumo iOS architecture overview.
+```
+
+## Sibling repos
+
+| Repo | Role |
+| --- | --- |
+| **`orchet-ios`** (this repo) | SwiftUI iOS client. |
+| `orchet-backend` | Services, domain packages, OpenAPI, infra, ML brain. The gateway lives here. |
+| `orchet-web` | Next.js web frontend. Hits the same gateway. |
+| `orchet-android` | Stub. Future Kotlin/Compose client (Android team). |
+| `orchet-mcp` | MCP hub. Reached by `services/mcp-client/` in orchet-backend over HTTP. |
+| `orchet-brand` | Tailwind + Swift design tokens, logos, design system. |
+
+The split was extracted from a pre-split monorepo (tagged
+`v0.1.0-before-repo-split` on the source remote at commit
+`610c486`).
 
 ## Help / feedback
 
-- File issues against this repo with the `architecture` or `bug`
-  labels as appropriate.
-- For docs gaps, see `docs/architecture/README.md` for the
-  capability index.
+- File issues against this repo with the `ios` label.
+- Backend, gateway, and domain issues belong in `orchet-backend`.
+- Brand/asset/icon issues belong in `orchet-brand`.

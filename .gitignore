@@ -23,3 +23,8 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# Environment files (iOS doesn't typically use .env, but kept for parity
+# with sibling repos so secrets never sneak in via local tooling).
+.env
+.env.*
