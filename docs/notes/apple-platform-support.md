@@ -138,5 +138,111 @@ for the broader coordination plan.
 | 1 | Audit (this doc) | ✓ |
 | 2 | Confirm iPad already works | ✓ |
 | 3 | Add watchOS companion app target — minimal SwiftUI MVP, simulator-only build | ✓ (target added; build gated on watchOS runtime download) |
-| 4 | WatchConnectivity bridge (iPhone → Watch app-status payload, display-only) | pending |
+| 4 | WatchConnectivity bridge (iPhone → Watch app-status payload, display-only) | **deferred** — see [Phase 4 deferral](#phase-4-deferral-watchconnectivity) |
 | Future | iPad-specific UX polish, Mac Catalyst evaluation, watch CI integration, OrchetWatch embedded into iOS bundle for real-device pairing, App Store rename | pending |
+
+## Phase 4 deferral — WatchConnectivity
+
+Deferred at the Phase 3 boundary. Reasons:
+
+1. **No end-to-end verification on the development machine today.**
+   The watchOS 26.4 runtime isn't installed locally, so a
+   WatchConnectivity bridge committed without paired-target
+   simulator iteration would land unverified. WC has nontrivial
+   `activationState` / `isReachable` semantics that benefit from
+   live debugging across the iPhone+Watch simulator pair.
+2. **Bridge code touches `LumoApp.swift`** — the iPhone side needs
+   `WCSession.default()` activation in the App lifecycle. That's
+   the single highest-risk file in the iPhone app for test-suite
+   regression. Doing this without the ability to interactively run
+   the iPhone app is fragile.
+3. **The Phase 3 watch MVP is independently useful**: the target
+   compiles cleanly, iPhone tests are green, and the watch shows a
+   meaningful "open the iPhone app to continue" placeholder.
+   Deferring Phase 4 doesn't strand Phase 3.
+
+### Pre-work to unblock Phase 4
+
+When ready to land it:
+
+1. Install the watchOS runtime on the development machine
+   (`xcodebuild -downloadPlatform watchOS` or via Xcode → Settings
+   → Components). ~5 GB free download; no Apple Developer Portal
+   coordination needed.
+2. Verify the OrchetWatch scheme builds against a watchOS
+   simulator (`Apple Watch Series 10 (46mm)` or whatever the
+   installed runtime exposes).
+3. Add a watch-side test target if any logic moves into the
+   companion (currently zero, so optional).
+
+### Phase 4 sketch (for the future commit, not landed here)
+
+iPhone side, new file `Lumo/Services/WatchSessionManager.swift`:
+
+```swift
+import Foundation
+import WatchConnectivity
+
+/// Sends a small, public app-status payload to the paired watch on
+/// state changes. NEVER carries OAuth tokens, Supabase session JWTs,
+/// payment details, or any secret material.
+@MainActor
+final class WatchSessionManager: NSObject, WCSessionDelegate {
+    static let shared = WatchSessionManager()
+    func activate() {
+        guard WCSession.isSupported() else { return }
+        let s = WCSession.default
+        s.delegate = self
+        s.activate()
+    }
+    func sendStatus(_ status: [String: Any]) {
+        guard WCSession.default.activationState == .activated else { return }
+        try? WCSession.default.updateApplicationContext(status)
+    }
+    // WCSessionDelegate stubs
+    func session(_ session: WCSession, activationDidCompleteWith
+                 activationState: WCSessionActivationState, error: Error?) {}
+    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionDidDeactivate(_ session: WCSession) {}
+}
+```
+
+Wire `WatchSessionManager.shared.activate()` once during `LumoApp`
+init. Call `sendStatus(...)` from existing state-change call sites
+with public-only fields (e.g. `["last_trip_destination": "Vegas",
+"last_updated_at": ISO8601 string]`).
+
+Watch side, new file `OrchetWatch/WatchSessionReceiver.swift`:
+
+```swift
+import Foundation
+import SwiftUI
+import WatchConnectivity
+
+@MainActor
+@Observable
+final class WatchAppState: NSObject, WCSessionDelegate {
+    var lastStatus: [String: Any] = [:]
+    func activate() { /* same shape as iPhone side */ }
+    func session(_ session: WCSession,
+                 didReceiveApplicationContext applicationContext: [String : Any]) {
+        Task { @MainActor in self.lastStatus = applicationContext }
+    }
+    // ...other delegate stubs
+}
+```
+
+`WatchRootView` reads `lastStatus` and renders public fields. Done.
+
+### Payload safety contract (enforced by review for Phase 4)
+
+The iPhone-side `sendStatus(...)` is the only WC entry point. It
+MUST refuse anything matching:
+
+- `Authorization`-style strings (Bearer tokens, JWTs)
+- Anything beginning with `pk_live_` / `sk_live_` (Stripe)
+- Anything containing `supabase.co` URLs with embedded auth
+- Field names matching `*token*`, `*secret*`, `*password*`
+
+These are best-effort defenses; real review at PR time is the
+authoritative gate.
