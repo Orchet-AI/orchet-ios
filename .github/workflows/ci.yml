@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        # Diagnostic — logs Xcode + available iOS simulators so any
+        # destination-name failure is debuggable from the run log
+        # without re-pushing.
+        run: |
+          xcodebuild -version
+          echo "--- available iOS simulators ---"
+          xcrun simctl list devices available | grep -E "iPhone (1[5-9]|2[0-5])" | head -10 || true
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Test (iPhone 16 Pro simulator)
+        # iPhone 16 Pro chosen over iPhone 17 Pro for broader runner
+        # compatibility — 16 Pro has been GA since iOS 18 (2024) and is
+        # present on any macos-15 runner with Xcode 16+. Local dev
+        # continues to use iPhone 17 Pro per the README.
+        run: |
+          xcodebuild test \
+            -project Lumo.xcodeproj \
+            -scheme Lumo \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
