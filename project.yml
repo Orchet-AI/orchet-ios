@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.lumo.rentals
   deploymentTarget:
     iOS: "17.0"
+    watchOS: "10.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
   defaultConfig: Debug
@@ -105,6 +106,46 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.lumo.rentals.ios.tests
         GENERATE_INFOPLIST_FILE: YES
 
+  # Phase 3 MVP — watchOS companion (single-target watch app, watchOS 7+
+  # shape; no embedded WatchKit extension). Display-only today: no
+  # backend calls, no OAuth, no payments, no keychain access. The iPhone
+  # app does NOT embed this app today (real-device pairing requires
+  # provisioning + Developer Portal coordination — out of scope for the
+  # initial MVP). Simulator-only build target.
+  #
+  # Naming: this is a NEW target carrying the post-rebrand "Orchet"
+  # branding. The existing iOS app target stays "Lumo" pending the
+  # App-Store rebrand coordination. The bundle ID still uses the
+  # `com.lumo.rentals.ios.*` prefix so the watch can pair with the
+  # existing iOS app on real devices (the WKCompanionAppBundleIdentifier
+  # in OrchetWatch/Info.plist points back at com.lumo.rentals.ios).
+  #
+  # Bundle IDs (preserve the bundle-identity invariant; only the target
+  # name + display name flip to Orchet):
+  #   Release: com.lumo.rentals.ios.watchkitapp
+  #   Debug:   com.lumo.rentals.ios.dev.watchkitapp
+  OrchetWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: OrchetWatch
+    settings:
+      base:
+        PRODUCT_NAME: OrchetWatch
+        TARGETED_DEVICE_FAMILY: "4"
+        INFOPLIST_FILE: OrchetWatch/Info.plist
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        SUPPORTED_PLATFORMS: "watchsimulator watchos"
+        SDKROOT: watchos
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.lumo.rentals.ios.dev.watchkitapp
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: com.lumo.rentals.ios.watchkitapp
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
 # Explicit shared scheme so xcodebuild on a fresh checkout (or after a
 # `rm -rf Lumo.xcodeproj`) finds a destination. xcodegen 2.45 does not
 # generate a shared scheme by default for this target shape; without
@@ -122,6 +163,24 @@ schemes:
       config: Debug
       targets:
         - LumoTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  # Phase 3 MVP — explicit shared scheme for the watchOS target so
+  # `xcodebuild -scheme OrchetWatch -destination 'platform=watchOS
+  # Simulator,...'` works on a fresh checkout without manual scheme
+  # generation. Same shape as the Lumo scheme above; no test target on
+  # the watch yet (display-only MVP).
+  OrchetWatch:
+    build:
+      targets:
+        OrchetWatch: all
+    run:
+      config: Debug
     profile:
       config: Release
     analyze:
