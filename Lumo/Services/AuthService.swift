@@ -50,6 +50,13 @@ struct LumoUser: Equatable {
 
 /// Protocol on AuthService so AuthStateMachine can be tested with a
 /// scripted fake instead of a real Supabase round-trip.
+///
+/// `@MainActor`-bound: every conformer (`AuthService`, `FakeAuthService`)
+/// and every consumer (`AuthViewModel`, `AppRootView`) is already
+/// main-actor-isolated. The annotation makes the contract explicit
+/// and lets Swift 6 strict-concurrency mode accept the conformances
+/// without `@preconcurrency` or other escape hatches.
+@MainActor
 protocol AuthServicing: AnyObject {
     var state: AuthState { get }
     var stateChange: AsyncStream<AuthState> { get }
