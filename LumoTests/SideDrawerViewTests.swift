@@ -112,19 +112,13 @@ final class SideDrawerViewTests: XCTestCase {
     /// drawer; if a future refactor reorders or omits a block, this
     /// test fails with a precise pointer at where the parity slipped.
     func test_drawerSource_sectionsRenderInWebMirroredOrder() throws {
-        let url = Bundle(for: SideDrawerViewTests.self)
-            .bundleURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        // Fall back to repo path for the source read — Bundle won't
-        // ship .swift sources at runtime. Use the file's canonical path.
+        // Bundle won't ship .swift sources at runtime; resolve the
+        // source via #filePath so the test works in any checkout
+        // (formerly hardcoded a single user's worktree path).
         let src = try String(
-            contentsOf: URL(fileURLWithPath:
-                "/Users/prasanthkalas/Lumo-Agents/Lumo_Super_Agent_claude_code/apps/ios/Lumo/Views/SideDrawerView.swift"
-            ),
+            contentsOf: SideDrawerViewTests.sideDrawerSourceURL(),
             encoding: .utf8
         )
-        _ = url
         let markers = [
             "header",            // LUMO header + close
             "newChatRow",        // "+ New chat" CTA
@@ -148,9 +142,7 @@ final class SideDrawerViewTests: XCTestCase {
         // source matches the existing "structural snapshot" pattern
         // used by ChatMessageListSnapshotTests.
         let src = try? String(
-            contentsOf: URL(fileURLWithPath:
-                "/Users/prasanthkalas/Lumo-Agents/Lumo_Super_Agent_claude_code/apps/ios/Lumo/Views/SideDrawerView.swift"
-            ),
+            contentsOf: SideDrawerViewTests.sideDrawerSourceURL(),
             encoding: .utf8
         )
         XCTAssertNotNil(src)
@@ -204,6 +196,21 @@ final class SideDrawerViewTests: XCTestCase {
 
     private func makeSuiteName() -> String {
         "SideDrawerViewTests.\(UUID().uuidString)"
+    }
+
+    /// Locate Lumo/Views/SideDrawerView.swift relative to this test
+    /// file's location, resolved at compile time via #filePath. The
+    /// test reads the .swift source as text to assert structural
+    /// invariants (section ordering, EXPLORE list ordering) — Bundle
+    /// resources can't carry .swift files, so a path lookup is the
+    /// only way. #filePath gives us a portable absolute path that
+    /// works on any checkout regardless of the surrounding directory
+    /// layout.
+    static func sideDrawerSourceURL(filePath: String = #filePath) -> URL {
+        URL(fileURLWithPath: filePath)
+            .deletingLastPathComponent()  // LumoTests/
+            .deletingLastPathComponent()  // repo root
+            .appendingPathComponent("Lumo/Views/SideDrawerView.swift")
     }
 
     private func makeDrawer(signedIn: Bool) -> SideDrawerView {
