@@ -76,11 +76,19 @@ final class ChatService {
         return ChatService(baseURL: url, gatewayBaseURL: gatewayURL)
     }
 
-    func stream(message: String, sessionID: String) -> AsyncThrowingStream<ChatEvent, Error> {
+    func stream(
+        message: String,
+        sessionID: String,
+        voiceCorrelation: VoiceTelemetryCorrelation? = nil
+    ) -> AsyncThrowingStream<ChatEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let request = try makeRequest(message: message, sessionID: sessionID)
+                    let request = try makeRequest(
+                        message: message,
+                        sessionID: sessionID,
+                        voiceCorrelation: voiceCorrelation
+                    )
                     let (bytes, response) = try await session.bytes(for: request)
                     if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                         throw ChatServiceError.badStatus(http.statusCode)
@@ -100,7 +108,11 @@ final class ChatService {
         }
     }
 
-    private func makeRequest(message: String, sessionID: String) throws -> URLRequest {
+    private func makeRequest(
+        message: String,
+        sessionID: String,
+        voiceCorrelation: VoiceTelemetryCorrelation?
+    ) throws -> URLRequest {
         // P2H-8: gateway-direct when configured, else apps/web BFF.
         let endpoint: URL
         if let gw = gatewayBaseURL {
@@ -117,6 +129,11 @@ final class ChatService {
         }
         if let token = accessTokenProvider(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let voiceCorrelation {
+            for (field, value) in voiceCorrelation.headers {
+                request.setValue(value, forHTTPHeaderField: field)
+            }
         }
         let body = ChatRequest(
             session_id: sessionID,
