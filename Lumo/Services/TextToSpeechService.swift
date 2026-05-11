@@ -99,6 +99,7 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
     private let websocketFactoryOverride: DeepgramTTSWebSocketFactory?
     private var chunker: TTSChunker!
     private var streamingActive = false
+    private var voiceTurn: VoiceTelemetryTurn?
 
     /// **Single persistent session** for one streaming reply.
     /// Created on `beginStreaming()` (or implicitly on `speak(_:)`),
@@ -129,6 +130,7 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
 
     func speak(_ text: String) async {
         cancel()
+        voiceTurn = VoiceTelemetry.shared.currentTurn()
         let session = ensureSession()
         await session.send(text: text)
         await session.flushAndDrain()
@@ -140,6 +142,7 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
 
     func beginStreaming() {
         cancel()
+        voiceTurn = VoiceTelemetry.shared.currentTurn()
         streamingActive = true
         _ = ensureSession()
         state = .speaking(provider: .deepgram)
@@ -179,6 +182,7 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
             audioSession: audioSession,
             voiceID: VoiceSettings.voiceId,
             websocketFactory: factory,
+            voiceTurn: voiceTurn,
             onError: { [weak self] reason in
                 self?.handleSessionError(reason: reason)
             }
@@ -189,9 +193,36 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
     }
 
     private func teardownSession(finalState: TTSState) {
+        let turn = voiceTurn
         session?.cancel()
         session = nil
         state = finalState
+        switch finalState {
+        case .finished:
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.playback_finished": "true",
+            ])
+        case .idle:
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.cancelled": "true",
+                "voice.cancel_reason": "tts_cancelled",
+            ])
+        case .error(let reason):
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.error": "tts_error",
+                "voice.error_reason": reason,
+            ])
+        case .fallback(let from, let to, let reason):
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.error": "tts_fallback",
+                "voice.tts.from": from.rawValue,
+                "voice.tts.to": to.rawValue,
+                "voice.error_reason": reason,
+            ])
+        case .speaking:
+            break
+        }
+        voiceTurn = nil
     }
 
     private func dispatchChunk(_ chunk: String) {
@@ -201,7 +232,12 @@ final class TextToSpeechService: NSObject, TextToSpeechServicing {
 
     private func handleSessionError(reason: String) {
         state = .error(reason)
+        VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: [
+            "voice.error": "tts_error",
+            "voice.error_reason": reason,
+        ])
         session = nil
+        voiceTurn = nil
         streamingActive = false
         chunker.reset()
     }
@@ -249,6 +285,7 @@ final class DeepgramTTSSession {
     private let audioSession: AudioSessionManager
     private let voiceID: String
     private let websocketFactory: DeepgramTTSWebSocketFactory
+    private weak var voiceTurn: VoiceTelemetryTurn?
     private let onError: (String) -> Void
 
     private var websocket: DeepgramTTSWebSocket?
@@ -263,12 +300,14 @@ final class DeepgramTTSSession {
         audioSession: AudioSessionManager,
         voiceID: String,
         websocketFactory: DeepgramTTSWebSocketFactory,
+        voiceTurn: VoiceTelemetryTurn?,
         onError: @escaping (String) -> Void
     ) {
         self.tokenService = tokenService
         self.audioSession = audioSession
         self.voiceID = voiceID
         self.websocketFactory = websocketFactory
+        self.voiceTurn = voiceTurn
         self.onError = onError
     }
 
@@ -415,6 +454,7 @@ final class DeepgramTTSSession {
               ),
               !data.isEmpty
         else { return }
+        voiceTurn?.startPlayOnce(audioBytes: data.count)
         let frameCount = AVAudioFrameCount(data.count / MemoryLayout<Int16>.size)
         guard frameCount > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)
@@ -432,6 +472,7 @@ final class DeepgramTTSSession {
                 self?.bufferCount = max(0, (self?.bufferCount ?? 1) - 1)
             }
         }
+        voiceTurn?.markFirstAudibleSample(audioBytes: data.count)
     }
 
     // MARK: - WebSocket send

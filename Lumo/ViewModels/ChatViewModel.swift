@@ -296,6 +296,12 @@ final class ChatViewModel: ObservableObject {
         streamStartTime = Date()
         lastFirstTokenLatency = nil
 
+        let voiceCorrelation: VoiceTelemetryCorrelation?
+        if lastVoiceMode.shouldSpeak {
+            voiceCorrelation = VoiceTelemetry.shared.currentTurn()?.correlation
+        } else {
+            voiceCorrelation = nil
+        }
         if lastVoiceMode.shouldSpeak {
             tts?.beginStreaming()
         }
@@ -307,14 +313,28 @@ final class ChatViewModel: ObservableObject {
         messages.append(ChatMessage(id: assistantID, role: .assistant, text: "", status: .streaming))
 
         streamingTask = Task { [weak self] in
-            await self?.runStream(prompt: prompt, assistantID: assistantID, addUserBubble: addUserBubble)
+            await self?.runStream(
+                prompt: prompt,
+                assistantID: assistantID,
+                addUserBubble: addUserBubble,
+                voiceCorrelation: voiceCorrelation
+            )
         }
     }
 
-    private func runStream(prompt: String, assistantID: UUID, addUserBubble: Bool) async {
+    private func runStream(
+        prompt: String,
+        assistantID: UUID,
+        addUserBubble: Bool,
+        voiceCorrelation: VoiceTelemetryCorrelation?
+    ) async {
         var sawFirstToken = false
         do {
-            for try await event in service.stream(message: prompt, sessionID: sessionID) {
+            for try await event in service.stream(
+                message: prompt,
+                sessionID: sessionID,
+                voiceCorrelation: voiceCorrelation
+            ) {
                 if Task.isCancelled { break }
                 switch event {
                 case .text(let chunk):

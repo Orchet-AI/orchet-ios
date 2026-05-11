@@ -115,6 +115,7 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
     private var websocket: DeepgramSTTWebSocket?
     private var receiveTask: Task<Void, Never>?
     private var silenceTimer: Task<Void, Never>?
+    private var voiceTurn: VoiceTelemetryTurn?
 
     /// Final-transcript accumulator — `is_final=true` chunks are
     /// concatenated until `speech_final=true` (or the silence
@@ -160,6 +161,7 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
     func start() async throws {
         // Stop anything in-flight before starting a new session.
         cancel()
+        voiceTurn = VoiceTelemetry.shared.currentTurn()
         finalAccumulator = ""
 
         try audioSession.configureForVoiceConversation()
@@ -171,6 +173,7 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
         do {
             token = try await tokenService.currentToken()
         } catch {
+            finishVoiceTurn(attributes: ["voice.error": "stt_token_failed"])
             state = .error(SpeechRecognitionError.tokenFailed(String(describing: error)).localizedDescription)
             throw SpeechRecognitionError.tokenFailed(String(describing: error))
         }
@@ -192,8 +195,14 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
         websocket = nil
         tokenService.markStreamActive(false)
 
-        if !finalAccumulator.isEmpty {
-            state = .final(transcript: finalAccumulator.trimmingCharacters(in: .whitespacesAndNewlines))
+        let transcript = finalAccumulator.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !transcript.isEmpty {
+            voiceTurn?.markTranscriptFinal(transcript: transcript)
+            state = .final(transcript: transcript)
+        } else {
+            finishVoiceTurn(attributes: [
+                "voice.error": "empty_transcript",
+            ])
         }
     }
 
@@ -256,6 +265,11 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
             }
             if error != nil { return }
             guard let data = SpeechRecognitionService.pcmData(from: outBuffer), !data.isEmpty else { return }
+            let byteCount = data.count
+            let voiceTurn = self.voiceTurn
+            Task { @MainActor in
+                voiceTurn?.markFirstAudioChunkReady(byteCount: byteCount)
+            }
             let ws = self.websocket
             Task { await ws?.send(audio: data) }
         }
@@ -309,12 +323,19 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
             let token = try await tokenService.currentToken()
             try await openStream(token: token, attempt: attempt + 1)
         } catch {
+            finishVoiceTurn(attributes: [
+                "voice.error": "stt_reconnect_auth_failed",
+            ])
             state = .error("Voice connection lost. Please try again.")
         }
     }
 
     private func reconnectWithBackoff(attempt: Int, reason: String) async {
         guard attempt < 3 else {
+            finishVoiceTurn(attributes: [
+                "voice.error": "stt_reconnect_failed",
+                "voice.error_reason": reason,
+            ])
             state = .error("Voice connection lost after 3 retries. Please try again.")
             cancel()
             return
@@ -330,7 +351,18 @@ final class SpeechRecognitionService: SpeechRecognitionServicing {
             let token = try await tokenService.currentToken()
             try await openStream(token: token, attempt: attempt + 1)
         } catch {
+            finishVoiceTurn(attributes: [
+                "voice.error": "stt_reconnect_failed",
+                "voice.error_reason": reason,
+            ])
             state = .error("Voice connection lost. Please try again.")
+        }
+    }
+
+    private func finishVoiceTurn(attributes: VoiceTelemetryAttributes) {
+        if let voiceTurn {
+            VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: attributes)
+            self.voiceTurn = nil
         }
     }
 

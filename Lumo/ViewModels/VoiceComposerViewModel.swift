@@ -94,6 +94,7 @@ final class VoiceComposerViewModel: ObservableObject {
     /// `SettingsView` reads this to decide whether to show the voice
     /// section (default OFF until first use).
     static let voiceUsageDefaultsKey = "lumo.voice.lastUsedAt"
+    private var voiceTurn: VoiceTelemetryTurn?
 
     init(
         speech: SpeechRecognitionServicing,
@@ -200,6 +201,13 @@ final class VoiceComposerViewModel: ObservableObject {
     /// in-flight partial.
     func cancel() {
         speech.cancel()
+        if let voiceTurn {
+            VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: [
+                "voice.cancelled": "true",
+                "voice.cancel_reason": "voice_composer_cancel",
+            ])
+            self.voiceTurn = nil
+        }
         state = .idle
     }
 
@@ -207,6 +215,7 @@ final class VoiceComposerViewModel: ObservableObject {
     /// to idle so the next press starts fresh.
     func consumeReadyTranscript() -> String? {
         guard case .ready(let t) = state else { return nil }
+        voiceTurn?.markTranscriptFinal(transcript: t)
         state = .idle
         UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: Self.voiceUsageDefaultsKey)
         return t
@@ -215,6 +224,9 @@ final class VoiceComposerViewModel: ObservableObject {
     // MARK: - Internals
 
     private func ensureAndStart() async {
+        let turn = VoiceTelemetry.shared.beginTurn()
+        voiceTurn = turn
+        turn.startCapture()
         state = .requestingPermissions
         let result = await speech.ensurePermissions()
         switch result {
@@ -224,13 +236,29 @@ final class VoiceComposerViewModel: ObservableObject {
                 // SpeechRecognitionService will yield .listening soon;
                 // observeSpeech() picks it up.
             } catch {
+                VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                    "voice.error": "speech_start_failed",
+                ])
+                voiceTurn = nil
                 state = .error((error as? LocalizedError)?.errorDescription ?? "\(error)")
             }
         case .microphoneDenied:
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.error": "microphone_denied",
+            ])
+            voiceTurn = nil
             state = .permissionDenied(reason: .microphone)
         case .speechRecognitionDenied:
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.error": "speech_recognition_denied",
+            ])
+            voiceTurn = nil
             state = .permissionDenied(reason: .speechRecognition)
         case .restrictedByDevice:
+            VoiceTelemetry.shared.finishTurn(turn, attributes: [
+                "voice.error": "speech_recognition_restricted",
+            ])
+            voiceTurn = nil
             state = .permissionDenied(reason: .restricted)
         }
     }
@@ -241,14 +269,36 @@ final class VoiceComposerViewModel: ObservableObject {
             // Only flip to idle if we're not already past the
             // recognition stage — a stale .idle event after .ready
             // would otherwise reset before the host consumes.
-            if !isPostRecognition { state = .idle }
+            if !isPostRecognition {
+                if let voiceTurn, state.isListening {
+                    VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: [
+                        "voice.cancelled": "true",
+                        "voice.cancel_reason": "speech_idle_before_transcript",
+                    ])
+                    self.voiceTurn = nil
+                }
+                state = .idle
+            }
         case .listening(let partial):
             state = .listening(partial: partial)
         case .final(let transcript):
+            voiceTurn?.markTranscriptFinal(transcript: transcript)
             state = .ready(transcript: transcript)
         case .permissionDenied:
+            if let voiceTurn {
+                VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: [
+                    "voice.error": "speech_permission_denied",
+                ])
+                self.voiceTurn = nil
+            }
             state = .permissionDenied(reason: .speechRecognition)
         case .error(let message):
+            if let voiceTurn {
+                VoiceTelemetry.shared.finishTurn(voiceTurn, attributes: [
+                    "voice.error": "speech_error",
+                ])
+                self.voiceTurn = nil
+            }
             state = .error(message)
         }
     }
