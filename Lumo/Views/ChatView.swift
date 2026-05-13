@@ -128,6 +128,19 @@ struct ChatView: View {
                                 )
                             }
 
+                            // SearchResultCardStack — image-rich cards
+                            // for turns whose answer was grounded in
+                            // web_search. The orchestrator emits the
+                            // `search_cards` SSE frame after the prose
+                            // stream completes; we render the stack
+                            // immediately below the prose, before any
+                            // compound dispatch or suggestion chips.
+                            // Mirrors web's app/page.tsx mount.
+                            if message.role == .assistant,
+                               let searchCards = viewModel.searchCardsByMessage[message.id] {
+                                SearchResultCardStack(value: searchCards)
+                            }
+
                             // Compound-dispatch strip — multi-agent
                             // trip orchestration. Lives below the
                             // assistant message that triggered it
