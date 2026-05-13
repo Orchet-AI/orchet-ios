@@ -8,6 +8,7 @@ enum ChatEvent: Equatable {
     case selection(InteractiveSelection)
     case summary(ConfirmationSummary)
     case compoundDispatch(CompoundDispatchPayload)
+    case searchCards(SearchCardsFrameValue)
     case other(type: String)
 }
 
@@ -251,6 +252,27 @@ final class ChatService {
                 return .other(type: type)
             }
             return .compoundDispatch(payload)
+        case "search_cards":
+            // Frame value shape (canonical contract — see orchet-backend
+            // packages/domain-orchestrator/src/executor/search-cards.ts):
+            //   { lead_story_index: number | null,
+            //     cards: [{ id, title, summary, source_url, source_host,
+            //               image_url, category, category_icon,
+            //               read_time_minutes }, ...] }
+            // We round-trip through JSONSerialization so the Codable
+            // decoder on SearchCardsFrameValue handles every field map
+            // — keeps the parser site here narrow. A malformed value
+            // (cards missing, wrong type) falls back to .other so the
+            // chat path never breaks over an aesthetic enhancement.
+            guard
+                let valueDict = json["value"] as? [String: Any],
+                let data = try? JSONSerialization.data(withJSONObject: valueDict),
+                let decoded = try? JSONDecoder().decode(SearchCardsFrameValue.self, from: data),
+                !decoded.cards.isEmpty
+            else {
+                return .other(type: type)
+            }
+            return .searchCards(decoded)
         case "assistant_suggestions":
             // Frame value shape (canonical contract — see
             // apps/web/lib/chat-suggestions.ts):

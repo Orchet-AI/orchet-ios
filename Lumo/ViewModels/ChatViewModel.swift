@@ -78,6 +78,13 @@ final class ChatViewModel: ObservableObject {
     /// closes when all legs reach terminal status, and the strip
     /// renders as a static settled record.
     @Published private(set) var compoundDispatchByMessage: [UUID: CompoundDispatchPayload] = [:]
+    /// SearchResultCard envelope keyed by the assistant message id.
+    /// Mirrors web's `UIMessage.searchCards`. The orchestrator emits
+    /// the `search_cards` SSE frame after the prose stream completes
+    /// for turns that grounded their answer in web_search; ChatView
+    /// renders `SearchResultCardStack` below the prose when this
+    /// dict has an entry for the message.
+    @Published private(set) var searchCardsByMessage: [UUID: SearchCardsFrameValue] = [:]
     /// Per-leg status overrides keyed by compound_transaction_id.
     /// Per-leg updates arrive via the per-compound stream and merge
     /// into the inner dictionary (leg_id → latest status). The view
@@ -210,6 +217,7 @@ final class ChatViewModel: ObservableObject {
         selectionsByMessage = [:]
         summariesByMessage = [:]
         compoundDispatchByMessage = [:]
+        searchCardsByMessage = [:]
         compoundLegStatusOverrides = [:]
         compoundLegMetadata = [:]
         compoundLegDetailExpandedFor = []
@@ -369,6 +377,8 @@ final class ChatViewModel: ObservableObject {
                     attachSummary(summary, assistantID: assistantID)
                 case .compoundDispatch(let dispatch):
                     attachCompoundDispatch(dispatch, assistantID: assistantID)
+                case .searchCards(let value):
+                    attachSearchCards(value, assistantID: assistantID)
                 case .other:
                     continue
                 }
@@ -417,6 +427,13 @@ final class ChatViewModel: ObservableObject {
         // shouldn't emit a second summary on the same turn but defending
         // here keeps the view surface predictable on replay paths).
         summariesByMessage[assistantID] = summary
+    }
+
+    private func attachSearchCards(_ value: SearchCardsFrameValue, assistantID: UUID) {
+        // One search_cards envelope per assistant turn. The orchestrator
+        // emits exactly one after the tool-use loop exits; rare double
+        // emission (e.g. on retry paths) just overwrites — latest wins.
+        searchCardsByMessage[assistantID] = value
     }
 
     private func attachCompoundDispatch(_ dispatch: CompoundDispatchPayload, assistantID: UUID) {
