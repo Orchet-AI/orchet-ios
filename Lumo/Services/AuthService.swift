@@ -223,26 +223,36 @@ final class AuthService: AuthServicing {
         }
         state = .signingIn
         do {
-            // Use the SDK's PKCE-aware URL builder so Supabase returns
-            // an auth code (?code=…) that exchangeCodeForSession can
-            // redeem. Hand-building the URL omits the code_challenge
-            // and Supabase falls back to implicit flow (#access_token=…),
-            // which extractAuthCode can't read.
+            // Use the SDK's all-in-one `signInWithOAuth(configure:)`
+            // which:
+            //   1) Builds the PKCE-aware /authorize URL and persists
+            //      the code_verifier in our KeychainStorage.
+            //   2) Opens an internal `ASWebAuthenticationSession`
+            //      keyed on the redirect URL's scheme.
+            //   3) On the callback URL, auto-detects PKCE flow and
+            //      calls /token with the stored verifier, mints a
+            //      session, and returns it.
+            //
+            // We previously did this choreography by hand
+            // (getOAuthSignInURL + manual ASWebAuthSession +
+            // extractAuthCode + exchangeCodeForSession). The manual
+            // path only read the `code` query item and missed the
+            // URL fragment shape some custom-scheme redirects use,
+            // and a chain of small races could leak the auth code to
+            // the web shell at SITE_URL — surfacing as the 400
+            // "both auth code and code verifier should be non-empty"
+            // server response.
             let redirectTo = URL(
                 string: "\(GoogleSignInService.callbackScheme)://\(GoogleSignInService.callbackHostPath)"
             )
-            let authorizeURL = try client.auth.getOAuthSignInURL(
+            let session = try await client.auth.signInWithOAuth(
                 provider: .google,
                 redirectTo: redirectTo
-            )
-            let callback = try await google.presentAuthSession(authorizeURL: authorizeURL)
-            if let providerError = GoogleSignInService.extractError(from: callback) {
-                throw GoogleSignInError.provider(providerError)
+            ) { _ in
+                // No customisation needed for the system browser
+                // sheet today. The default presentation context
+                // provider hits the foremost UIWindow.
             }
-            guard let code = GoogleSignInService.extractAuthCode(from: callback) else {
-                throw GoogleSignInError.missingAuthCode
-            }
-            let session = try await client.auth.exchangeCodeForSession(authCode: code)
             let user = Self.lumoUser(from: session.user)
             // Fresh sign-in — skip the biometric gate for this session,
             // matching the Apple path.
