@@ -58,6 +58,7 @@ struct RootView: View {
     @StateObject private var connectionsViewModel: ConnectionsScreenViewModel
     @StateObject private var workspaceViewModel: WorkspaceScreenViewModel
     @StateObject private var costViewModel: CostScreenViewModel
+    @StateObject private var intentsViewModel: IntentsScreenViewModel
     /// ORCHET-IOS-PARITY-1B — reader-mode sheet controller. Hoisted
     /// into RootView so re-entries through navigation keep its state
     /// (in-flight fetch, last-shown article).
@@ -95,6 +96,7 @@ struct RootView: View {
         workspaceFetcher: WorkspaceFetching,
         readerFetcher: ReaderFetching,
         costFetcher: CostFetching,
+        intentsFetcher: IntentsFetching,
         accessTokenProvider: @escaping () -> String? = { nil },
         onSignOut: @escaping () -> Void
     ) {
@@ -148,6 +150,9 @@ struct RootView: View {
         )
         _costViewModel = StateObject(
             wrappedValue: CostScreenViewModel(fetcher: costFetcher)
+        )
+        _intentsViewModel = StateObject(
+            wrappedValue: IntentsScreenViewModel(fetcher: intentsFetcher)
         )
         _readerController = StateObject(
             wrappedValue: ReaderSheetController(service: readerFetcher)
@@ -291,6 +296,8 @@ struct RootView: View {
             ConnectionsView(viewModel: connectionsViewModel)
         case .cost:
             CostView(viewModel: costViewModel)
+        case .intents:
+            IntentsView(viewModel: intentsViewModel)
         }
     }
 

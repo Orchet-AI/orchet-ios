@@ -50,6 +50,8 @@ struct LumoApp: App {
     /// ORCHET-IOS-PARITY-1B — reader-mode side drawer for
     /// SearchResultCard taps. Hits the orchestrator GET /reader.
     private let readerClient: ReaderFetching
+    /// Standing routines — mirrors web /intents.
+    private let intentsClient: IntentsFetching
     /// DEEPGRAM-IOS-IMPL-1 Phase 1 — short-lived token cache shared
     /// by the Deepgram STT (`SpeechRecognitionService`) and TTS
     /// (`TextToSpeechService`) clients. Memory-only per the privacy
@@ -147,6 +149,12 @@ struct LumoApp: App {
             userIDProvider: userID,
             accessTokenProvider: token
         )
+        self.intentsClient = IntentsClient(
+            baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
         #if DEBUG
         if let fakeMode = ProcessInfo.processInfo
             .arguments.firstIndex(of: "-LumoSeedDrawerScreens").map({ $0 + 1 })
@@ -191,7 +199,8 @@ struct LumoApp: App {
             deepgramTokenService: deepgramTokenService,
             workspaceFetcher: workspaceClient,
             readerFetcher: readerClient,
-            costFetcher: costClient
+            costFetcher: costClient,
+            intentsFetcher: intentsClient
         )
         .onAppear {
             // The delegate is constructed by UIKit before our init's
