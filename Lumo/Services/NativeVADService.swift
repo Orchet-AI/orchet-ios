@@ -92,7 +92,12 @@ final class NativeVADService {
     /// Convert a buffer's RMS amplitude to dBFS. Empty / silent
     /// buffers return -160 dBFS rather than -infinity so the
     /// downstream comparison stays well-defined.
-    static func rmsDBFS(buffer: AVAudioPCMBuffer) -> Float {
+    ///
+    /// `nonisolated` so the audio-tap closure (which runs on a
+    /// background queue inside AVAudioEngine) can call it without
+    /// an actor hop on every buffer, and so XCTest can invoke it
+    /// off the main actor.
+    nonisolated static func rmsDBFS(buffer: AVAudioPCMBuffer) -> Float {
         guard let channels = buffer.floatChannelData else { return -160 }
         let frameCount = Int(buffer.frameLength)
         guard frameCount > 0 else { return -160 }
