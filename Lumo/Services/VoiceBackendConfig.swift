@@ -29,12 +29,16 @@ enum VoiceBackendConfig {
     }()
 
     /// Base URL of the streaming voice service. Falls back to the
-    /// production Fly host if the Info.plist value is missing — that
-    /// keeps fresh-clone builds reaching a working backend, mirroring
-    /// the `OrchetGatewayBase` fallback shape in `AppConfig`.
+    /// production Fly host if the Info.plist value is missing or
+    /// looks truncated. The truncation guard exists because xcconfig
+    /// treats `//` as a line comment with no escape, so a literal
+    /// `https://orchet-voice.fly.dev` in xcconfig becomes the string
+    /// `"https:"` once substituted into Info.plist. We detect that
+    /// (and other cases without a host) and fall back instead of
+    /// returning a host-less URL that breaks everything downstream.
     static var voiceServiceBaseURL: URL {
         let raw = (Bundle.main.object(forInfoDictionaryKey: "OrchetVoiceBase") as? String) ?? ""
-        if !raw.isEmpty, let url = URL(string: raw) {
+        if !raw.isEmpty, let url = URL(string: raw), let host = url.host, !host.isEmpty {
             return url
         }
         return URL(string: "https://orchet-voice.fly.dev")!
