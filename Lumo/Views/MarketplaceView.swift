@@ -45,8 +45,8 @@ struct MarketplaceView: View {
                     loadingSkeleton
                 case .loaded(let agents) where agents.isEmpty:
                     emptyState
-                case .loaded(let agents):
-                    browseLayout(agents)
+                case .loaded:
+                    filteredBrowseLayout
                 case .error(let message):
                     errorState(message)
                 }
@@ -58,6 +58,170 @@ struct MarketplaceView: View {
         .navigationBarTitleDisplayMode(.large)
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
+    }
+
+    // MARK: - Filtered browse layout (PR — marketplace search/filter)
+
+    private var filteredBrowseLayout: some View {
+        let filtered = viewModel.filteredAgents
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: LumoSpacing.md) {
+                searchField
+                segmentChips
+                if viewModel.availableCategories.count > 2 {
+                    categoryChips
+                }
+                if filtered.isEmpty {
+                    noResultsState
+                } else {
+                    body(for: filtered)
+                }
+            }
+            .padding(.horizontal, LumoSpacing.md)
+            .padding(.vertical, LumoSpacing.md)
+        }
+        .accessibilityIdentifier("marketplace.filteredList")
+    }
+
+    private var searchField: some View {
+        HStack(spacing: LumoSpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(LumoColors.labelTertiary)
+            TextField("Search agents…", text: $viewModel.query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .accessibilityIdentifier("marketplace.search.field")
+            if !viewModel.query.isEmpty {
+                Button {
+                    viewModel.query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(LumoColors.labelTertiary)
+                }
+                .accessibilityIdentifier("marketplace.search.clear")
+            }
+        }
+        .padding(.horizontal, LumoSpacing.md)
+        .padding(.vertical, LumoSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: LumoRadius.md, style: .continuous)
+                .fill(LumoColors.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LumoRadius.md, style: .continuous)
+                .stroke(LumoColors.separator, lineWidth: 1)
+        )
+    }
+
+    private var segmentChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: LumoSpacing.xs) {
+                ForEach(MarketplaceSegment.allCases) { seg in
+                    chip(
+                        label: seg.label,
+                        selected: viewModel.segment == seg,
+                        identifier: "marketplace.segment.\(seg.rawValue)"
+                    ) {
+                        viewModel.segment = seg
+                    }
+                }
+            }
+        }
+    }
+
+    private var categoryChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: LumoSpacing.xs) {
+                ForEach(viewModel.availableCategories, id: \.self) { cat in
+                    chip(
+                        label: cat == "all" ? "All categories" : titleize(cat),
+                        selected: viewModel.category == cat,
+                        identifier: "marketplace.category.\(cat)"
+                    ) {
+                        viewModel.category = cat
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(
+        label: String,
+        selected: Bool,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(LumoFonts.caption.weight(.semibold))
+                .tracking(0.6)
+                .foregroundStyle(selected ? LumoColors.label : LumoColors.labelSecondary)
+                .padding(.horizontal, LumoSpacing.sm + 2)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(selected ? LumoColors.surfaceElevated : Color.clear)
+                )
+                .overlay(
+                    Capsule().stroke(selected ? LumoColors.cyan : LumoColors.separator, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private var noResultsState: some View {
+        VStack(spacing: LumoSpacing.md) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(LumoColors.labelTertiary)
+            Text("No agents match your filters.")
+                .font(LumoFonts.body)
+                .foregroundStyle(LumoColors.labelSecondary)
+            Button {
+                viewModel.resetFilters()
+            } label: {
+                Text("Reset filters")
+                    .font(LumoFonts.bodyEmphasized)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, LumoSpacing.md)
+                    .padding(.vertical, LumoSpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: LumoRadius.md, style: .continuous)
+                            .fill(LumoColors.cyan)
+                    )
+            }
+            .accessibilityIdentifier("marketplace.resetFilters")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, LumoSpacing.xl)
+    }
+
+    @ViewBuilder
+    private func body(for filtered: [MarketplaceAgentDTO]) -> some View {
+        let featured = MarketplaceUI.featured(from: filtered)
+        let groups = MarketplaceUI.groupByCategory(filtered.filter { $0.agent_id != featured?.agent_id })
+        if let featured {
+            sectionHeader("FEATURED")
+            NavigationLink {
+                MarketplaceAgentDetailView(agent: featured, viewModel: viewModel)
+            } label: {
+                MarketplaceFeaturedCard(agent: featured)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("marketplace.featured.\(featured.agent_id)")
+        }
+        ForEach(groups, id: \.label) { group in
+            rail(label: group.label, agents: group.agents)
+        }
+    }
+
+    private func titleize(_ s: String) -> String {
+        let cleaned = s.replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+        return cleaned
+            .split(separator: " ")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
     }
 
     // MARK: - States
