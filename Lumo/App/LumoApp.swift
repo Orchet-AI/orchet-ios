@@ -44,6 +44,7 @@ struct LumoApp: App {
     /// DEBUG fixture seam in RootView swaps the same wire-shape with
     /// `FakeDrawerScreensFetcher` for screenshot capture.
     private let drawerScreensFetcher: DrawerScreensFetching
+    private let workspaceClient: WorkspaceFetching
     /// DEEPGRAM-IOS-IMPL-1 Phase 1 — short-lived token cache shared
     /// by the Deepgram STT (`SpeechRecognitionService`) and TTS
     /// (`TextToSpeechService`) clients. Memory-only per the privacy
@@ -123,6 +124,12 @@ struct LumoApp: App {
             userIDProvider: userID,
             accessTokenProvider: token
         )
+        self.workspaceClient = WorkspaceClient(
+            baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
         #if DEBUG
         if let fakeMode = ProcessInfo.processInfo
             .arguments.firstIndex(of: "-LumoSeedDrawerScreens").map({ $0 + 1 })
@@ -164,7 +171,8 @@ struct LumoApp: App {
             proactiveCache: proactiveCache,
             proactiveClient: proactiveClient,
             drawerScreensFetcher: drawerScreensFetcher,
-            deepgramTokenService: deepgramTokenService
+            deepgramTokenService: deepgramTokenService,
+            workspaceFetcher: workspaceClient
         )
         .onAppear {
             // The delegate is constructed by UIKit before our init's

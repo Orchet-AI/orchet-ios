@@ -17,6 +17,7 @@ struct AppRootView: View {
     private let proactiveClient: ProactiveMomentsFetching
     private let drawerScreensFetcher: DrawerScreensFetching
     private let deepgramTokenService: DeepgramTokenServicing
+    private let workspaceFetcher: WorkspaceFetching
     /// Tracks the user_id we last triggered an onboarding check for,
     /// so a sign-out → sign-in cycle re-checks (the new user might
     /// have a different onboarded flag).
@@ -32,7 +33,8 @@ struct AppRootView: View {
         proactiveCache: ProactiveMomentsCache,
         proactiveClient: ProactiveMomentsFetching,
         drawerScreensFetcher: DrawerScreensFetching,
-        deepgramTokenService: DeepgramTokenServicing
+        deepgramTokenService: DeepgramTokenServicing,
+        workspaceFetcher: WorkspaceFetching
     ) {
         self.authService = authService
         self.chatService = chatService
@@ -44,6 +46,7 @@ struct AppRootView: View {
         self.proactiveClient = proactiveClient
         self.drawerScreensFetcher = drawerScreensFetcher
         self.deepgramTokenService = deepgramTokenService
+        self.workspaceFetcher = workspaceFetcher
         _authViewModel = StateObject(wrappedValue: AuthViewModel(auth: authService))
         _onboardingViewModel = StateObject(
             wrappedValue: OnboardingViewModel(fetcher: drawerScreensFetcher)
@@ -109,6 +112,7 @@ struct AppRootView: View {
                 proactiveClient: proactiveClient,
                 drawerScreensFetcher: drawerScreensFetcher,
                 deepgramTokenService: deepgramTokenService,
+                workspaceFetcher: workspaceFetcher,
                 accessTokenProvider: { [weak authService] in authService?.currentAccessToken() },
                 onSignOut: handleSignOut
             )

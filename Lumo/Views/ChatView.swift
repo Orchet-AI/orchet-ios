@@ -21,6 +21,11 @@ struct ChatView: View {
     @ObservedObject private var streamingVoice: StreamingVoiceViewModel
     @FocusState private var inputFocused: Bool
     @State private var showPermissionAlert = false
+    /// ORCHET-IOS-PARITY-1 — toast surfaced when the voice service
+    /// emits `voice_marketplace_installed` after a low-risk
+    /// auto-install path. Cleared on a 3 s timer.
+    @State private var marketplaceInstallToast: VoiceMarketplaceInstalledMessage?
+    @State private var installToastTask: Task<Void, Never>?
 
     /// Hoisted-state initialiser — `RootView` owns the chat + voice
     /// view-models so the drawer's "New Chat" can call `reset()` and
@@ -40,11 +45,28 @@ struct ChatView: View {
     var body: some View {
         messageContainer
             .background(LumoColors.background.ignoresSafeArea())
+            .overlay(alignment: .top) {
+                if let toast = marketplaceInstallToast {
+                    installToastView(toast)
+                        .padding(.top, LumoSpacing.sm)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(10)
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
                     errorBanner
                     voiceTranscriptBanner
                     inputBar
+                }
+            }
+            .task {
+                // ORCHET-IOS-PARITY-1 — surface the voice-driven
+                // auto-install toast. Idempotent re-entry via the
+                // ViewBuilder lifecycle is OK because PassthroughSubject
+                // multi-subscribes cleanly.
+                for await msg in streamingVoice.service.marketplaceInstalled.values {
+                    presentInstallToast(msg)
                 }
             }
             .onDisappear { viewModel.cancelStream() }
@@ -424,6 +446,41 @@ struct ChatView: View {
             // the gate to .listening on the resulting .idle event.
             voiceComposer.requestBargeIn()
         }
+    }
+
+    // MARK: - Marketplace install toast (voice-driven)
+
+    private func presentInstallToast(_ msg: VoiceMarketplaceInstalledMessage) {
+        installToastTask?.cancel()
+        withAnimation(LumoAnimation.quick) {
+            marketplaceInstallToast = msg
+        }
+        installToastTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(LumoAnimation.quick) {
+                marketplaceInstallToast = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func installToastView(_ msg: VoiceMarketplaceInstalledMessage) -> some View {
+        HStack(spacing: LumoSpacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(LumoColors.success)
+            Text("Installed \(msg.display_name ?? msg.agent_id)")
+                .font(LumoFonts.callout)
+                .foregroundStyle(LumoColors.label)
+        }
+        .padding(.horizontal, LumoSpacing.md)
+        .padding(.vertical, LumoSpacing.sm)
+        .background(
+            Capsule()
+                .fill(LumoColors.surfaceElevated)
+                .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
+        )
+        .accessibilityIdentifier("chat.voice.marketplaceInstalled")
     }
 
     // MARK: - Voice → chat handoff

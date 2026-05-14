@@ -56,6 +56,7 @@ struct RootView: View {
     @StateObject private var marketplaceViewModel: MarketplaceScreenViewModel
     @StateObject private var historyViewModel: HistoryScreenViewModel
     @StateObject private var connectionsViewModel: ConnectionsScreenViewModel
+    @StateObject private var workspaceViewModel: WorkspaceScreenViewModel
     private let drawerScreensFetcher: DrawerScreensFetching
 
     @State private var path = NavigationPath()
@@ -86,6 +87,7 @@ struct RootView: View {
         proactiveClient: ProactiveMomentsFetching,
         drawerScreensFetcher: DrawerScreensFetching,
         deepgramTokenService: DeepgramTokenServicing,
+        workspaceFetcher: WorkspaceFetching,
         accessTokenProvider: @escaping () -> String? = { nil },
         onSignOut: @escaping () -> Void
     ) {
@@ -133,6 +135,9 @@ struct RootView: View {
         )
         _connectionsViewModel = StateObject(
             wrappedValue: ConnectionsScreenViewModel(fetcher: drawerScreensFetcher)
+        )
+        _workspaceViewModel = StateObject(
+            wrappedValue: WorkspaceScreenViewModel(fetcher: workspaceFetcher)
         )
     }
 
@@ -224,7 +229,7 @@ struct RootView: View {
     private func destinationView(for destination: DrawerDestination) -> some View {
         switch destination {
         case .workspace:
-            WorkspaceView()
+            WorkspaceView(viewModel: workspaceViewModel)
         case .trips:
             TripsView(
                 viewModel: historyViewModel,
