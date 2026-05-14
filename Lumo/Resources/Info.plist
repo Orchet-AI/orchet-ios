@@ -72,6 +72,20 @@
 	<string>$(LUMO_STRIPE_MERCHANT_ID)</string>
 	<key>LumoAPNsUseSandbox</key>
 	<string>$(LUMO_APNS_USE_SANDBOX)</string>
+	<!--
+	  ORCHET-IOS-PARITY-1: streaming voice path.
+	  - OrchetVoiceMode: "batch" (default — legacy push-to-talk
+	                     through Deepgram /stt + /tts) or
+	                     "streaming" (Daily WebRTC against the
+	                     orchet-voice Fly service).
+	  - OrchetVoiceBase: voice service base URL. Defaults to
+	                     orchet-voice.fly.dev; only override for a
+	                     custom branch deployment.
+	-->
+	<key>OrchetVoiceMode</key>
+	<string>$(ORCHET_VOICE_MODE)</string>
+	<key>OrchetVoiceBase</key>
+	<string>$(ORCHET_VOICE_BASE)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Orchet uses your microphone so you can talk to your assistant. Your voice is processed on-device for transcription; nothing is recorded or stored.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -83,6 +97,11 @@
 		<string>remote-notification</string>
 		<string>fetch</string>
 		<string>processing</string>
+		<!--
+		  audio: keep the Daily WebRTC call alive while the screen
+		  is locked or the app is backgrounded (ORCHET-IOS-PARITY-1).
+		-->
+		<string>audio</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>

@@ -39,4 +39,12 @@ LUMO_STRIPE_MERCHANT_ID =
 // app store launch is ready.
 LUMO_APNS_USE_SANDBOX = true
 
+// Streaming voice (ORCHET-IOS-PARITY-1). `batch` keeps the legacy
+// push-to-talk Deepgram pipeline; `streaming` mounts the Daily WebRTC
+// path against orchet-voice.fly.dev. Defaults are conservative —
+// production stays on batch until TestFlight soak completes; flip in
+// Lumo.local.xcconfig per-build or per-engineer.
+ORCHET_VOICE_MODE = batch
+ORCHET_VOICE_BASE = https://orchet-voice.fly.dev
+
 #include? "Lumo.local.xcconfig"

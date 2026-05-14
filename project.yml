@@ -39,6 +39,13 @@ packages:
   StripePaymentSheet:
     url: https://github.com/stripe/stripe-ios-spm
     from: "24.0.0"
+  # Daily WebRTC iOS SDK — streaming voice path (ORCHET-IOS-PARITY-1).
+  # Supplies CallClient, audio capture, app-message channel. Gated at
+  # runtime behind OrchetVoiceMode=streaming; default-batch builds do
+  # not exercise this dep.
+  Daily:
+    url: https://github.com/daily-co/daily-client-ios
+    from: "0.27.0"
 
 settings:
   base:
@@ -65,6 +72,8 @@ targets:
         product: StripePaymentSheet
       - package: StripePaymentSheet
         product: StripeApplePay
+      - package: Daily
+        product: Daily
     settings:
       base:
         PRODUCT_NAME: Lumo
@@ -86,6 +95,12 @@ targets:
         INFOPLIST_KEY_LumoStripePublishableKey: $(LUMO_STRIPE_PUBLISHABLE_KEY_TEST)
         INFOPLIST_KEY_LumoStripeMerchantID: $(LUMO_STRIPE_MERCHANT_ID)
         INFOPLIST_KEY_LumoAPNsUseSandbox: $(LUMO_APNS_USE_SANDBOX)
+        # Streaming voice (ORCHET-IOS-PARITY-1). Mode is `batch`
+        # (legacy push-to-talk) or `streaming` (Daily WebRTC). Base
+        # points at the orchet-voice Fly service. Per-engineer
+        # overrides live in Lumo.local.xcconfig.
+        INFOPLIST_KEY_OrchetVoiceMode: $(ORCHET_VOICE_MODE)
+        INFOPLIST_KEY_OrchetVoiceBase: $(ORCHET_VOICE_BASE)
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.lumo.rentals.ios.dev
