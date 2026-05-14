@@ -55,6 +55,9 @@ final class ReaderArticleBodyTests: XCTestCase {
             "<p>Hi <strong>there</strong>.</p>"
         )
         XCTAssertNotNil(attributed)
-        XCTAssertTrue(String(attributed?.characters ?? "".characters).contains("there"))
+        if let attributed {
+            let rendered = String(attributed.characters)
+            XCTAssertTrue(rendered.contains("there"))
+        }
     }
 }
