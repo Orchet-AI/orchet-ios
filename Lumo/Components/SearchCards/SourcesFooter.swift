@@ -11,6 +11,10 @@ import SwiftUI
 /// handles the wrap without forcing a horizontal scroll.
 struct SearchCardsSourcesFooter: View {
     let cards: [SearchCard]
+    /// ORCHET-IOS-PARITY-1B — when supplied, chips become buttons
+    /// that fire `onTap(card)`. Defaults to nil for backwards
+    /// compatibility — the chip falls back to `Link` then.
+    var onTap: ((SearchCard) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -56,7 +60,10 @@ struct SearchCardsSourcesFooter: View {
 
     @ViewBuilder
     private func sourceChip(_ card: SearchCard) -> some View {
-        if let url = URL(string: card.sourceURL) {
+        if let onTap {
+            Button { onTap(card) } label: { chipLabel(for: card) }
+                .buttonStyle(.plain)
+        } else if let url = URL(string: card.sourceURL) {
             Link(destination: url) {
                 chipLabel(for: card)
             }
