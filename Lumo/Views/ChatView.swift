@@ -16,6 +16,9 @@ import SwiftUI
 struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var voiceComposer: VoiceComposerViewModel
+    /// Streaming voice view model — present unconditionally, used only
+    /// when `VoiceBackendConfig.current == .streaming`. ORCHET-IOS-PARITY-1.
+    @ObservedObject private var streamingVoice: StreamingVoiceViewModel
     @FocusState private var inputFocused: Bool
     @State private var showPermissionAlert = false
 
@@ -24,9 +27,14 @@ struct ChatView: View {
     /// notification deep-links can mutate `input` without re-creating
     /// the view tree. Also used by unit tests to drive both pipelines
     /// without spinning up a real Deepgram WebSocket.
-    init(viewModel: ChatViewModel, voiceComposer: VoiceComposerViewModel) {
+    init(
+        viewModel: ChatViewModel,
+        voiceComposer: VoiceComposerViewModel,
+        streamingVoice: StreamingVoiceViewModel
+    ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _voiceComposer = StateObject(wrappedValue: voiceComposer)
+        self.streamingVoice = streamingVoice
     }
 
     var body: some View {
@@ -50,6 +58,21 @@ struct ChatView: View {
                 Button("Cancel", role: .cancel) { voiceComposer.cancel() }
             } message: {
                 Text(voiceComposer.state.permissionDeniedMessage ?? "")
+            }
+            // ORCHET-IOS-PARITY-1 — native confirmation modal driven
+            // by `voice_show_confirmation` Daily app-messages. Sheet
+            // dismiss + Cancel both resolve as `accepted = false`;
+            // Confirm POSTs `/voice/confirm-action`.
+            .sheet(item: $streamingVoice.pendingConfirmation) { confirmation in
+                VoiceConfirmationView(
+                    confirmation: confirmation,
+                    onAccept: {
+                        Task { await streamingVoice.resolveConfirmation(confirmation, accepted: true) }
+                    },
+                    onCancel: {
+                        Task { await streamingVoice.resolveConfirmation(confirmation, accepted: false) }
+                    }
+                )
             }
     }
 
@@ -335,24 +358,36 @@ struct ChatView: View {
                 )
                 .accessibilityIdentifier("chat.composer.input")
 
-                ChatComposerTrailingButton(
-                    mode: ChatComposerTrailingButton.Mode.from(
-                        input: viewModel.input,
-                        isListening: voiceComposer.state.isListening,
-                        phase: voiceComposer.phase
-                    ),
-                    // Stop affordance during AGENT_SPEAKING /
-                    // POST_SPEAKING_GUARD must remain tappable —
-                    // it's the user's only barge-in path. The
-                    // streaming-disable only applies to listening
-                    // and idle modes.
-                    isDisabled: viewModel.isStreaming
-                        && !voiceComposer.state.isListening
-                        && !voiceComposer.isMicPausedForTts,
-                    onTap: handleTrailingTap,
-                    onLongPressBegan: { Task { await voiceComposer.pressBegan() } },
-                    onLongPressEnded: { voiceComposer.release() }
-                )
+                // ORCHET-IOS-PARITY-1 — when the streaming voice
+                // flag is on, the empty-input trailing affordance is
+                // the streaming mic. As soon as the user types
+                // anything, fall through to the legacy send/stop
+                // chrome so they can still send text without ending
+                // a live call (the streaming session keeps running).
+                if VoiceBackendConfig.current == .streaming
+                    && viewModel.input.trimmingCharacters(in: .whitespaces).isEmpty
+                {
+                    StreamingVoiceButton(viewModel: streamingVoice)
+                } else {
+                    ChatComposerTrailingButton(
+                        mode: ChatComposerTrailingButton.Mode.from(
+                            input: viewModel.input,
+                            isListening: voiceComposer.state.isListening,
+                            phase: voiceComposer.phase
+                        ),
+                        // Stop affordance during AGENT_SPEAKING /
+                        // POST_SPEAKING_GUARD must remain tappable —
+                        // it's the user's only barge-in path. The
+                        // streaming-disable only applies to listening
+                        // and idle modes.
+                        isDisabled: viewModel.isStreaming
+                            && !voiceComposer.state.isListening
+                            && !voiceComposer.isMicPausedForTts,
+                        onTap: handleTrailingTap,
+                        onLongPressBegan: { Task { await voiceComposer.pressBegan() } },
+                        onLongPressEnded: { voiceComposer.release() }
+                    )
+                }
             }
             .padding(.horizontal, LumoSpacing.md)
             .padding(.vertical, LumoSpacing.sm + 2)

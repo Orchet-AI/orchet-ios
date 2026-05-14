@@ -35,6 +35,14 @@ struct RootView: View {
 
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var voiceComposer: VoiceComposerViewModel
+    /// Streaming voice (ORCHET-IOS-PARITY-1) — driven by Daily WebRTC
+    /// against orchet-voice.fly.dev. Mounted at the chat composer
+    /// when `VoiceBackendConfig.current == .streaming`; otherwise
+    /// inert (no Daily call is initiated, no audio session is
+    /// configured). Always created so the chat surface can attach
+    /// its subjects unconditionally — the streaming path is gated by
+    /// the user tapping the streaming mic, not by allocation.
+    @StateObject private var streamingVoice: StreamingVoiceViewModel
     @StateObject private var proactiveViewModel: ProactiveMomentsViewModel
     @StateObject private var recentChats = RecentChatsStore()
 
@@ -78,6 +86,7 @@ struct RootView: View {
         proactiveClient: ProactiveMomentsFetching,
         drawerScreensFetcher: DrawerScreensFetching,
         deepgramTokenService: DeepgramTokenServicing,
+        accessTokenProvider: @escaping () -> String? = { nil },
         onSignOut: @escaping () -> Void
     ) {
         self.chatService = chatService
@@ -100,6 +109,11 @@ struct RootView: View {
         _voiceComposer = StateObject(
             wrappedValue: VoiceComposerViewModel(
                 speech: SpeechRecognitionService(tokenService: deepgramTokenService)
+            )
+        )
+        _streamingVoice = StateObject(
+            wrappedValue: StreamingVoiceViewModel(
+                accessTokenProvider: accessTokenProvider
             )
         )
         _proactiveViewModel = StateObject(
@@ -187,7 +201,20 @@ struct RootView: View {
             ProactiveMomentsView(viewModel: proactiveViewModel) { moment in
                 proactiveViewModel.dismiss(moment.id)
             }
-            ChatView(viewModel: chatViewModel, voiceComposer: voiceComposer)
+            ChatView(
+                viewModel: chatViewModel,
+                voiceComposer: voiceComposer,
+                streamingVoice: streamingVoice
+            )
+        }
+        .task {
+            // ORCHET-IOS-PARITY-1 — attach the streaming voice
+            // service's transcript subjects to the chat thread so
+            // user/assistant bubbles render inline during a Daily
+            // voice turn. Idempotent and always wired (the streaming
+            // path is gated by the user tapping the streaming mic,
+            // not by allocation), so the chat surface stays uniform.
+            chatViewModel.attachStreamingVoice(streamingVoice.service)
         }
     }
 

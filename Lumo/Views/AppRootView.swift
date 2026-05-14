@@ -109,6 +109,7 @@ struct AppRootView: View {
                 proactiveClient: proactiveClient,
                 drawerScreensFetcher: drawerScreensFetcher,
                 deepgramTokenService: deepgramTokenService,
+                accessTokenProvider: { [weak authService] in authService?.currentAccessToken() },
                 onSignOut: handleSignOut
             )
         }
