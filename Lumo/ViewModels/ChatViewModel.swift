@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -126,6 +127,17 @@ final class ChatViewModel: ObservableObject {
     /// Captured at the moment send() begins so we can record
     /// first-token latency on the matching .text event.
     private var streamStartTime: Date?
+
+    // ORCHET-IOS-PARITY-1 — streaming voice transcript wiring.
+    //
+    // The `(turn_id, message_id)` pair tracks the in-flight assistant
+    // bubble being assembled from `voice_assistant_transcript_delta`
+    // messages. When `turn_id` is missing on the wire (best effort
+    // from the voice service), we still keep a single in-flight
+    // bubble keyed by "no-turn" so deltas concatenate cleanly.
+    private var streamingVoiceCancellables = Set<AnyCancellable>()
+    private var inflightAssistantTurnKey: String?
+    private var inflightAssistantMessageID: UUID?
 
     init(
         service: ChatService,
@@ -263,6 +275,93 @@ final class ChatViewModel: ObservableObject {
     /// before exercising loadSession's preserve-on-failure path.
     func appendUserMessageForTesting(text: String) {
         messages.append(ChatMessage(role: .user, text: text, status: .sent))
+    }
+
+    /// ORCHET-IOS-PARITY-1 — wire the chat thread to a streaming
+    /// voice service's transcript subjects so user + assistant
+    /// bubbles render inline during a Daily WebRTC voice turn.
+    ///
+    /// Critical invariant: never re-dispatch the user transcript
+    /// through `send()`. The voice service is running its own LLM
+    /// turn; doing so would trigger Claude Sonnet in parallel and
+    /// diverge the rendered chat from what the user actually heard
+    /// — the bug the web parity fix already paid for.
+    ///
+    /// Idempotent: a re-attach replaces the existing subscriptions.
+    func attachStreamingVoice(_ voice: StreamingVoiceService) {
+        streamingVoiceCancellables.removeAll()
+        inflightAssistantTurnKey = nil
+        inflightAssistantMessageID = nil
+
+        // Both ChatViewModel and StreamingVoiceService are @MainActor;
+        // PassthroughSubject delivers synchronously on the sending
+        // call stack, so no `.receive(on:)` hop is needed (and adding
+        // one would defer delivery into the next runloop tick, which
+        // makes the view jitter on rapid delta bursts).
+        voice.userTranscript
+            .sink { [weak self] msg in self?.appendVoiceUserTranscript(msg) }
+            .store(in: &streamingVoiceCancellables)
+
+        voice.assistantTranscriptDelta
+            .sink { [weak self] msg in self?.applyVoiceAssistantDelta(msg) }
+            .store(in: &streamingVoiceCancellables)
+
+        voice.assistantTranscriptFinal
+            .sink { [weak self] msg in self?.applyVoiceAssistantFinal(msg) }
+            .store(in: &streamingVoiceCancellables)
+    }
+
+    /// Tear down the streaming voice subscriptions. Safe to call
+    /// repeatedly. Called by RootView when the streaming voice
+    /// session ends.
+    func detachStreamingVoice() {
+        streamingVoiceCancellables.removeAll()
+        // Mark any orphan in-flight assistant bubble as delivered so
+        // the UI doesn't render a perpetual streaming spinner.
+        if let id = inflightAssistantMessageID,
+           let idx = messages.firstIndex(where: { $0.id == id }) {
+            messages[idx].status = .delivered
+        }
+        inflightAssistantTurnKey = nil
+        inflightAssistantMessageID = nil
+    }
+
+    private func appendVoiceUserTranscript(_ msg: VoiceUserTranscriptMessage) {
+        let text = msg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        messages.append(ChatMessage(role: .user, text: text, status: .sent))
+    }
+
+    private func applyVoiceAssistantDelta(_ msg: VoiceAssistantTranscriptDeltaMessage) {
+        let turnKey = msg.turn_id ?? "no-turn"
+        if let id = inflightAssistantMessageID,
+           inflightAssistantTurnKey == turnKey,
+           let idx = messages.firstIndex(where: { $0.id == id }) {
+            messages[idx].text += msg.text
+            return
+        }
+        // New in-flight bubble.
+        let bubble = ChatMessage(role: .assistant, text: msg.text, status: .streaming)
+        messages.append(bubble)
+        inflightAssistantTurnKey = turnKey
+        inflightAssistantMessageID = bubble.id
+    }
+
+    private func applyVoiceAssistantFinal(_ msg: VoiceAssistantTranscriptFinalMessage) {
+        let turnKey = msg.turn_id ?? "no-turn"
+        if let id = inflightAssistantMessageID,
+           inflightAssistantTurnKey == turnKey,
+           let idx = messages.firstIndex(where: { $0.id == id }) {
+            messages[idx].text = msg.text
+            messages[idx].status = .delivered
+        } else {
+            // Final without any deltas (e.g. dropped data-channel
+            // frames) — synthesize the assistant bubble from the
+            // final text alone so the user sees the response.
+            messages.append(ChatMessage(role: .assistant, text: msg.text, status: .delivered))
+        }
+        inflightAssistantTurnKey = nil
+        inflightAssistantMessageID = nil
     }
 
     /// Maps a server-side replayed message into the iOS ChatMessage
