@@ -134,10 +134,50 @@ final class MarketplaceScreenViewModel: ObservableObject {
     @Published var mcpConnectError: String? = nil
     @Published var mcpConnectSuccessAgentID: String? = nil
 
+    /// Filter state (search + segment + category). Mirrors web's
+    /// `/marketplace` page (`apps/web/app/marketplace/page.tsx`) —
+    /// same semantics via `MarketplaceFilters.*` helpers.
+    @Published var query: String = ""
+    @Published var segment: MarketplaceSegment = .all
+    @Published var category: String = "all"
+
     private let fetcher: DrawerScreensFetching
 
     init(fetcher: DrawerScreensFetching) {
         self.fetcher = fetcher
+    }
+
+    /// Computed view of agents under the current filters. Hot path
+    /// for the list — `MarketplaceFilters.filterAndSort` is pure +
+    /// O(n log n).
+    var filteredAgents: [MarketplaceAgentDTO] {
+        guard case .loaded(let agents) = state else { return [] }
+        return MarketplaceFilters.filterAndSort(
+            agents: agents,
+            segment: segment,
+            query: query,
+            category: category
+        )
+    }
+
+    /// All known categories for the current catalog, including the
+    /// "all" sentinel as the first entry.
+    var availableCategories: [String] {
+        guard case .loaded(let agents) = state else { return ["all"] }
+        return MarketplaceFilters.categories(for: agents)
+    }
+
+    var counts: MarketplaceCounts {
+        guard case .loaded(let agents) = state else {
+            return MarketplaceCounts(total: 0, connected: 0, available: 0, review: 0, mcp: 0)
+        }
+        return MarketplaceFilters.counts(for: agents)
+    }
+
+    func resetFilters() {
+        query = ""
+        segment = .all
+        category = "all"
     }
 
     func load() async {
