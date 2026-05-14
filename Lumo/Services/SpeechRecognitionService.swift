@@ -593,6 +593,10 @@ final class SpeechRecognitionStub: SpeechRecognitionServicing {
 
     var nextPermission: SpeechPermissionResult = .granted
     var nextStartError: Error?
+    /// IOS-HANDS-FREE-CONTINUOUS-1 — tests assert auto-resume fires
+    /// by checking this counter incremented after the tail guard
+    /// elapses.
+    private(set) var startCalls: Int = 0
 
     init() {
         var c: AsyncStream<SpeechRecognitionState>.Continuation!
@@ -603,6 +607,7 @@ final class SpeechRecognitionStub: SpeechRecognitionServicing {
     func ensurePermissions() async -> SpeechPermissionResult { nextPermission }
 
     func start() async throws {
+        startCalls += 1
         if let nextStartError {
             state = .error((nextStartError as? LocalizedError)?.errorDescription ?? "\(nextStartError)")
             throw nextStartError

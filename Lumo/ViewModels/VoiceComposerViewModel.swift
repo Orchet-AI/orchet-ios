@@ -84,6 +84,14 @@ final class VoiceComposerViewModel: ObservableObject {
     private let tailGuardMs: Int
     private var ttsObserveTask: Task<Void, Never>?
     private var tailGuardTask: Task<Void, Never>?
+
+    /// IOS-HANDS-FREE-CONTINUOUS-1 — flipped to `true` when the user
+    /// explicitly stops listening (release of a hold gesture, tap
+    /// during a listening state, explicit Stop affordance). The
+    /// auto-resume gate clears it next time the user opts back in
+    /// (tapToTalk / pressBegan). Mirrors codex's `userStoppedListening`
+    /// from `apps/web/components/VoiceMode.tsx`.
+    private var userStoppedListening: Bool = false
     /// Held weakly so cancellation reaches the TTS service when
     /// the user taps the Stop affordance during AGENT_SPEAKING.
     /// IOS-VOICE-MODE-CONTROLS-REGRESSION-1 — without this hook
@@ -180,6 +188,9 @@ final class VoiceComposerViewModel: ObservableObject {
     /// user's voice doesn't bleed into Lumo's own audio playback.
     func tapToTalk() async {
         if SpeechModeGating.isMicPaused(phase: phase) { return }
+        // User opted back in — clear any prior explicit-stop flag so
+        // hands-free auto-resume re-engages next turn.
+        userStoppedListening = false
         await ensureAndStart()
     }
 
@@ -187,12 +198,19 @@ final class VoiceComposerViewModel: ObservableObject {
     /// during AGENT_SPEAKING / POST_SPEAKING_GUARD is dropped.
     func pressBegan() async {
         if SpeechModeGating.isMicPaused(phase: phase) { return }
+        userStoppedListening = false
         await ensureAndStart()
     }
 
     /// Hold-to-talk press released. Finalize whatever we have.
+    ///
+    /// A release during `.listening` is treated as a user-initiated
+    /// stop, which suppresses hands-free auto-resume until the next
+    /// explicit tap (mirrors web's `setUserStoppedListening(true)`
+    /// in `VoiceMode.tsx`).
     func release() {
         if state.isListening {
+            userStoppedListening = true
             speech.stop()
         }
     }
@@ -358,8 +376,31 @@ final class VoiceComposerViewModel: ObservableObject {
                 guard let self = self else { return }
                 if self.phase == .postSpeakingGuard {
                     self.phase = .listening
+                    self.attemptHandsFreeAutoResume()
                 }
             }
+        }
+    }
+
+    /// IOS-HANDS-FREE-CONTINUOUS-1 — called from the tail-guard
+    /// completion. If every gate in `SpeechModeGating.canResumeListeningAfterTts`
+    /// is satisfied, auto-start the next tap-to-talk turn. The gates
+    /// guarantee that we won't open the mic on cold launch (the
+    /// `autoListenUnlocked` requirement), after an explicit user
+    /// stop (`userStoppedListening`), or with the toggle off
+    /// (`handsFree`).
+    private func attemptHandsFreeAutoResume() {
+        let gate = CanResumeListeningInput(
+            autoListenUnlocked: VoiceSettings.hasUsedVoice,
+            handsFree: VoiceSettings.handsFreeContinuous,
+            userStoppedListening: userStoppedListening,
+            enabled: true,
+            busy: false,
+            micPausedForTts: SpeechModeGating.isMicPaused(phase: phase)
+        )
+        guard SpeechModeGating.canResumeListeningAfterTts(input: gate) else { return }
+        Task { @MainActor [weak self] in
+            await self?.tapToTalk()
         }
     }
 

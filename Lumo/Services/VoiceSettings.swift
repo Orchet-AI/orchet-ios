@@ -16,6 +16,11 @@ enum VoiceSettings {
     private static let speakResponsesKey = "lumo.voice.speakResponses"
     private static let hasUsedVoiceKey = VoiceComposerViewModel.voiceUsageDefaultsKey
     private static let voiceIdKey = "lumo.voice.voiceId"
+    /// IOS-HANDS-FREE-CONTINUOUS-1 — when true, the mic re-opens
+    /// automatically after the agent finishes speaking (post-TTS
+    /// tail-guard window) without the user tapping the mic again.
+    /// Mirrors the web preference in `apps/web/components/VoiceMode.tsx`.
+    private static let handsFreeContinuousKey = "lumo.voice.handsFreeContinuous"
 
     /// Default Deepgram Aura-2 voice (matches web's
     /// `apps/web/lib/voice-catalog.ts::DEFAULT_VOICE_ID`).
@@ -55,5 +60,16 @@ enum VoiceSettings {
 
     static var hasUsedVoice: Bool {
         UserDefaults.standard.object(forKey: hasUsedVoiceKey) != nil
+    }
+
+    /// IOS-HANDS-FREE-CONTINUOUS-1 — opt-in hands-free auto-resume
+    /// of the mic after each TTS turn. Default `false` so existing
+    /// push-to-talk users aren't surprised by a mic that opens on
+    /// its own. The streaming voice path (Daily WebRTC) keeps the
+    /// mic open for the entire call regardless of this flag — this
+    /// preference governs the legacy batch (Deepgram STT) path.
+    static var handsFreeContinuous: Bool {
+        get { UserDefaults.standard.bool(forKey: handsFreeContinuousKey) }
+        set { UserDefaults.standard.set(newValue, forKey: handsFreeContinuousKey) }
     }
 }
