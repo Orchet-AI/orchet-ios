@@ -95,7 +95,8 @@ final class NativeVADService {
     ///
     /// `nonisolated` so the audio-tap closure (which runs on a
     /// background queue inside AVAudioEngine) can call it without
-    /// an actor hop on every buffer.
+    /// an actor hop on every buffer, and so XCTest can invoke it
+    /// off the main actor.
     nonisolated static func rmsDBFS(buffer: AVAudioPCMBuffer) -> Float {
         guard let channels = buffer.floatChannelData else { return -160 }
         let frameCount = Int(buffer.frameLength)
