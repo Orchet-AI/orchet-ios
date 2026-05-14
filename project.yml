@@ -46,6 +46,16 @@ packages:
   Daily:
     url: https://github.com/daily-co/daily-client-ios
     from: "0.27.0"
+  # GoogleSignIn iOS SDK — native Google sign-in that returns an
+  # id_token directly. Bypasses the Supabase OAuth web redirect
+  # (which was leaking the auth code to www.orchet.ai instead of
+  # the lumo:// scheme and producing the "both auth code and code
+  # verifier should be non-empty" 400 on /token). We hand the
+  # id_token + nonce to Supabase via `signInWithIdToken`, same
+  # pattern as Apple Sign-In.
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "8.0.0"
 
 settings:
   base:
@@ -74,6 +84,8 @@ targets:
         product: StripeApplePay
       - package: Daily
         product: Daily
+      - package: GoogleSignIn
+        product: GoogleSignIn
     settings:
       base:
         PRODUCT_NAME: Lumo

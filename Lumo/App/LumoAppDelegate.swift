@@ -1,3 +1,4 @@
+import GoogleSignIn
 import UIKit
 import UserNotifications
 
@@ -75,5 +76,20 @@ final class LumoAppDelegate: NSObject, UIApplicationDelegate {
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         print("[notif] APNs registration failed: \(error.localizedDescription)")
+    }
+
+    /// Forward URL callbacks to GoogleSignIn so the native Google
+    /// sign-in flow can resume after the user completes auth in the
+    /// system browser (when GIDSignIn falls back to an external
+    /// browser instead of the in-app sheet).
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        if GIDSignIn.sharedInstance.handle(url) {
+            return true
+        }
+        return false
     }
 }

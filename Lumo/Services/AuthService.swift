@@ -223,36 +223,27 @@ final class AuthService: AuthServicing {
         }
         state = .signingIn
         do {
-            // Use the SDK's all-in-one `signInWithOAuth(configure:)`
-            // which:
-            //   1) Builds the PKCE-aware /authorize URL and persists
-            //      the code_verifier in our KeychainStorage.
-            //   2) Opens an internal `ASWebAuthenticationSession`
-            //      keyed on the redirect URL's scheme.
-            //   3) On the callback URL, auto-detects PKCE flow and
-            //      calls /token with the stored verifier, mints a
-            //      session, and returns it.
+            // Native Google Sign-In via GIDSignIn returns an id_token
+            // directly; we exchange that with Supabase via
+            // `signInWithIdToken` — the same pattern Apple Sign-In
+            // uses. Bypasses the OAuth web-redirect flow entirely.
             //
-            // We previously did this choreography by hand
-            // (getOAuthSignInURL + manual ASWebAuthSession +
-            // extractAuthCode + exchangeCodeForSession). The manual
-            // path only read the `code` query item and missed the
-            // URL fragment shape some custom-scheme redirects use,
-            // and a chain of small races could leak the auth code to
-            // the web shell at SITE_URL — surfacing as the 400
-            // "both auth code and code verifier should be non-empty"
-            // server response.
-            let redirectTo = URL(
-                string: "\(GoogleSignInService.callbackScheme)://\(GoogleSignInService.callbackHostPath)"
+            // We previously tried Supabase's web-flow OAuth (both
+            // manual choreography AND the SDK's signInWithOAuth(
+            // configure:) helper) — both surfaced a 400 from
+            // Supabase /token reading "both auth code and code
+            // verifier should be non-empty", because the redirect
+            // from Supabase /callback was landing on www.orchet.ai
+            // (the project's SITE_URL) instead of the custom-scheme
+            // lumo://auth/callback we asked for, and the web shell
+            // there raced an exchange without an iOS verifier.
+            let idToken = try await GoogleNativeSignIn.idToken()
+            let session = try await client.auth.signInWithIdToken(
+                credentials: OpenIDConnectCredentials(
+                    provider: .google,
+                    idToken: idToken
+                )
             )
-            let session = try await client.auth.signInWithOAuth(
-                provider: .google,
-                redirectTo: redirectTo
-            ) { _ in
-                // No customisation needed for the system browser
-                // sheet today. The default presentation context
-                // provider hits the foremost UIWindow.
-            }
             let user = Self.lumoUser(from: session.user)
             // Fresh sign-in — skip the biometric gate for this session,
             // matching the Apple path.
@@ -279,8 +270,32 @@ final class AuthService: AuthServicing {
 
     func devSignIn() async {
         #if DEBUG
-        let stub = LumoUser(id: "dev-user", email: "dev@lumo.local", displayName: "Dev User")
-        state = .signedIn(stub)
+        // Sign in to a real Supabase test account so the gateway gets
+        // a valid JWT for downstream chat / marketplace / voice calls.
+        // The earlier synthetic-LumoUser path produced no
+        // accessToken, so every API call hit a 401 at the gateway.
+        guard let client else {
+            let stub = LumoUser(id: "dev-user", email: "dev@orchet.local", displayName: "Dev User")
+            state = .signedIn(stub)
+            return
+        }
+        state = .signingIn
+        do {
+            let session = try await client.auth.signIn(
+                email: "dev@orchet.ai",
+                password: "OrchetDevPass!2026"
+            )
+            let user = Self.lumoUser(from: session.user)
+            state = .signedIn(user)
+        } catch {
+            // Fall back to the synthetic user so the simulator at
+            // least lands on the chat surface, even though calls
+            // will still 401. Surface the failure in logs so the
+            // dev knows to check Supabase availability.
+            print("[auth] devSignIn fell back to stub: \(error.localizedDescription)")
+            let stub = LumoUser(id: "dev-user", email: "dev@orchet.local", displayName: "Dev User")
+            state = .signedIn(stub)
+        }
         #endif
     }
 
