@@ -57,6 +57,7 @@ struct RootView: View {
     @StateObject private var historyViewModel: HistoryScreenViewModel
     @StateObject private var connectionsViewModel: ConnectionsScreenViewModel
     @StateObject private var workspaceViewModel: WorkspaceScreenViewModel
+    @StateObject private var costViewModel: CostScreenViewModel
     /// ORCHET-IOS-PARITY-1B — reader-mode sheet controller. Hoisted
     /// into RootView so re-entries through navigation keep its state
     /// (in-flight fetch, last-shown article).
@@ -93,6 +94,7 @@ struct RootView: View {
         deepgramTokenService: DeepgramTokenServicing,
         workspaceFetcher: WorkspaceFetching,
         readerFetcher: ReaderFetching,
+        costFetcher: CostFetching,
         accessTokenProvider: @escaping () -> String? = { nil },
         onSignOut: @escaping () -> Void
     ) {
@@ -143,6 +145,9 @@ struct RootView: View {
         )
         _workspaceViewModel = StateObject(
             wrappedValue: WorkspaceScreenViewModel(fetcher: workspaceFetcher)
+        )
+        _costViewModel = StateObject(
+            wrappedValue: CostScreenViewModel(fetcher: costFetcher)
         )
         _readerController = StateObject(
             wrappedValue: ReaderSheetController(service: readerFetcher)
@@ -284,6 +289,8 @@ struct RootView: View {
             ProfileView()
         case .connections:
             ConnectionsView(viewModel: connectionsViewModel)
+        case .cost:
+            CostView(viewModel: costViewModel)
         }
     }
 

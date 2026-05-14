@@ -45,6 +45,8 @@ struct LumoApp: App {
     /// `FakeDrawerScreensFetcher` for screenshot capture.
     private let drawerScreensFetcher: DrawerScreensFetching
     private let workspaceClient: WorkspaceFetching
+    /// Cost dashboard client — mirrors web `/settings/cost`.
+    private let costClient: CostFetching
     /// ORCHET-IOS-PARITY-1B — reader-mode side drawer for
     /// SearchResultCard taps. Hits the orchestrator GET /reader.
     private let readerClient: ReaderFetching
@@ -139,6 +141,12 @@ struct LumoApp: App {
             userIDProvider: userID,
             accessTokenProvider: token
         )
+        self.costClient = CostClient(
+            baseURL: config.apiBaseURL,
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
         #if DEBUG
         if let fakeMode = ProcessInfo.processInfo
             .arguments.firstIndex(of: "-LumoSeedDrawerScreens").map({ $0 + 1 })
@@ -182,7 +190,8 @@ struct LumoApp: App {
             drawerScreensFetcher: drawerScreensFetcher,
             deepgramTokenService: deepgramTokenService,
             workspaceFetcher: workspaceClient,
-            readerFetcher: readerClient
+            readerFetcher: readerClient,
+            costFetcher: costClient
         )
         .onAppear {
             // The delegate is constructed by UIKit before our init's

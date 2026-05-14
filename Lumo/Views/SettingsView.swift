@@ -184,6 +184,19 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("settings.receipts")
 
+            // Cost dashboard — mirrors web /settings/cost. Pushed via
+            // the root NavigationStack so the same CostScreenViewModel
+            // is reused on drawer + deep-link entries.
+            NavigationLink(value: DrawerDestination.cost) {
+                HStack {
+                    Image(systemName: "chart.bar")
+                        .foregroundStyle(LumoColors.cyanDeep)
+                        .frame(width: 26)
+                    Text("Cost")
+                }
+            }
+            .accessibilityIdentifier("settings.cost")
+
             #if DEBUG
             // DEBUG-only entry point so screenshot capture can drive the
             // PaymentConfirmationCard without a real chat-side trigger
