@@ -28,6 +28,10 @@ enum DrawerDestination: Hashable {
     case marketplace
     case profile
     case connections
+    /// Cost dashboard — mirrors web `/settings/cost`. Pushed from
+    /// Settings; not on the drawer's EXPLORE list (it's a sub-page
+    /// of Settings, not a top-level surface).
+    case cost
 }
 
 /// One entry in the drawer's "Recent Chats" list.
