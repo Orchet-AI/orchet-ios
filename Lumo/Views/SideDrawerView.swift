@@ -49,6 +49,7 @@ struct SideDrawerView: View {
     private static let exploreItems: [(DrawerDestination, String, String)] = [
         (.workspace,    "Workspace",   "square.grid.2x2"),
         (.trips,        "Trips",       "airplane"),
+        (.intents,      "Routines",    "calendar.badge.clock"),
         (.receipts,     "Receipts",    "doc.text"),
         (.history,      "History",     "clock.arrow.circlepath"),
         (.memory,       "Memory",      "brain.head.profile"),

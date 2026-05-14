@@ -32,6 +32,9 @@ enum DrawerDestination: Hashable {
     /// Settings; not on the drawer's EXPLORE list (it's a sub-page
     /// of Settings, not a top-level surface).
     case cost
+    /// Standing routines — mirrors web /intents. Pushed from the
+    /// drawer's EXPLORE section.
+    case intents
 }
 
 /// One entry in the drawer's "Recent Chats" list.
