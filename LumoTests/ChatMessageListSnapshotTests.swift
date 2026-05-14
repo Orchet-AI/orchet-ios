@@ -64,6 +64,30 @@ final class ChatMessageListSnapshotTests: XCTestCase {
         XCTAssertEqual(assistant.status, .delivered)
     }
 
+    func test_searchCardsFrame_attachesToActiveAssistantMessage() async throws {
+        let (vm, _) = makeViewModel([
+            #"{"type":"text","value":"Here are the latest updates."}"#,
+            #"{"type":"search_cards","value":{"lead_story_index":0,"cards":[{"id":"google-0","title":"Google launches Gemini updates","summary":"A new set of AI releases rolled out across Search and Android.","source_url":"https://blog.google/products/gemini","source_host":"blog.google","image_url":null,"category":"AI","category_icon":"sparkles","read_time_minutes":3},{"id":"google-1","title":"Pixel hardware refresh","summary":"Hardware coverage focuses on AI-first device updates.","source_url":"https://store.google.com/category/phones","source_host":"store.google.com","image_url":"https://store.google.com/pixel.jpg","category":"Hardware","category_icon":"device-laptop","read_time_minutes":2}]}}"#,
+            #"{"type":"done"}"#,
+        ])
+        vm.input = "latest google news"
+        vm.send()
+        try await waitForStreamCompletion(vm)
+
+        XCTAssertEqual(vm.messages.count, 2)
+        let assistant = vm.messages[1]
+        XCTAssertEqual(assistant.role, .assistant)
+        XCTAssertEqual(assistant.text, "Here are the latest updates.")
+        let cards = try XCTUnwrap(vm.searchCardsByMessage[assistant.id])
+        XCTAssertEqual(cards.leadStoryIndex, 0)
+        XCTAssertEqual(cards.cards.map(\.id), ["google-0", "google-1"])
+        XCTAssertEqual(cards.cards[0].sourceHost, "blog.google")
+        XCTAssertEqual(cards.cards[1].categoryIcon, "device-laptop")
+
+        vm.reset()
+        XCTAssertTrue(vm.searchCardsByMessage.isEmpty)
+    }
+
     // MARK: - Snapshot: failed user message
 
     func test_userMessage_whenServerErrors_userBubbleMarkedFailed() async throws {
