@@ -86,6 +86,12 @@ final class ChatViewModel: ObservableObject {
     /// renders `SearchResultCardStack` below the prose when this
     /// dict has an entry for the message.
     @Published private(set) var searchCardsByMessage: [UUID: SearchCardsFrameValue] = [:]
+
+    /// PARITY-1C — composed_ui frame value attached per assistant
+    /// turn. Same lifecycle as `searchCardsByMessage`: cleared on
+    /// reset/loadSession, replaced on re-emission, persisted via
+    /// the replay decoder.
+    @Published private(set) var composedUIByMessage: [UUID: ComposedUIFrameValue] = [:]
     /// Per-leg status overrides keyed by compound_transaction_id.
     /// Per-leg updates arrive via the per-compound stream and merge
     /// into the inner dictionary (leg_id → latest status). The view
@@ -189,6 +195,37 @@ final class ChatViewModel: ObservableObject {
         startStream(prompt: trimmed, addUserBubble: true)
     }
 
+    /// PARITY-1C — turn a composed-UI gesture into a follow-up
+    /// natural-language turn. Translation table mirrors web's
+    /// `handleComposedAction` verbatim so the orchestrator's flow
+    /// controller sees the same prompt regardless of client.
+    func handleComposedAction(_ action: ComposedAction) {
+        let prompt: String
+        switch action {
+        case .cabBook(let provider, let tier):
+            prompt = "Book the \(tier) on \(provider)."
+        case .restaurantConfirm(let name, let request):
+            if let request, !request.trimmingCharacters(in: .whitespaces).isEmpty {
+                prompt = "Confirm the reservation at \(name). Special request: \(request)."
+            } else {
+                prompt = "Confirm the reservation at \(name)."
+            }
+        case .groceryPlaceOrder(let provider, let items):
+            let parts = items
+                .filter { $0.quantity > 0 }
+                .map { item -> String in
+                    let qty = item.quantity.truncatingRemainder(dividingBy: 1) == 0
+                        ? String(Int(item.quantity))
+                        : String(item.quantity)
+                    return "\(qty)× \(item.id)"
+                }
+            prompt = "Place the \(provider) order: \(parts.joined(separator: ", "))."
+        }
+        guard !isStreaming else { return }
+        lastVoiceMode = .text
+        startStream(prompt: prompt, addUserBubble: true)
+    }
+
     /// Re-issue the most recent failed user message.
     func retry() {
         guard let failed = messages.last(where: { $0.role == .user && $0.status == .failed }) else { return }
@@ -230,6 +267,7 @@ final class ChatViewModel: ObservableObject {
         summariesByMessage = [:]
         compoundDispatchByMessage = [:]
         searchCardsByMessage = [:]
+        composedUIByMessage = [:]
         compoundLegStatusOverrides = [:]
         compoundLegMetadata = [:]
         compoundLegDetailExpandedFor = []
@@ -478,6 +516,8 @@ final class ChatViewModel: ObservableObject {
                     attachCompoundDispatch(dispatch, assistantID: assistantID)
                 case .searchCards(let value):
                     attachSearchCards(value, assistantID: assistantID)
+                case .composedUI(let value):
+                    attachComposedUI(value, assistantID: assistantID)
                 case .other:
                     continue
                 }
@@ -533,6 +573,15 @@ final class ChatViewModel: ObservableObject {
         // emits exactly one after the tool-use loop exits; rare double
         // emission (e.g. on retry paths) just overwrites — latest wins.
         searchCardsByMessage[assistantID] = value
+    }
+
+    /// PARITY-1C — composed_ui frame value attach. Same lifecycle as
+    /// search-cards: one envelope per assistant turn, latest wins.
+    /// Action callbacks dispatched through `handleComposedAction`
+    /// turn each user gesture into a follow-up text turn so the
+    /// backend's flow controller can do the actual booking step.
+    private func attachComposedUI(_ value: ComposedUIFrameValue, assistantID: UUID) {
+        composedUIByMessage[assistantID] = value
     }
 
     private func attachCompoundDispatch(_ dispatch: CompoundDispatchPayload, assistantID: UUID) {

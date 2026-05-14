@@ -208,6 +208,20 @@ struct ChatView: View {
                                 )
                             }
 
+                            // PARITY-1C — composed_ui multi-card
+                            // dispatcher. Renders cab/restaurant/
+                            // grocery cards directly under the
+                            // assistant prose. Each card gesture
+                            // becomes a follow-up turn via
+                            // `handleComposedAction`.
+                            if message.role == .assistant,
+                               let composed = viewModel.composedUIByMessage[message.id] {
+                                ComposedUIView(
+                                    frame: composed,
+                                    onAction: { action in viewModel.handleComposedAction(action) }
+                                )
+                            }
+
                             // Compound-dispatch strip — multi-agent
                             // trip orchestration. Lives below the
                             // assistant message that triggered it

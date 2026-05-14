@@ -9,6 +9,7 @@ enum ChatEvent: Equatable {
     case summary(ConfirmationSummary)
     case compoundDispatch(CompoundDispatchPayload)
     case searchCards(SearchCardsFrameValue)
+    case composedUI(ComposedUIFrameValue)
     case other(type: String)
 }
 
@@ -273,6 +274,23 @@ final class ChatService {
                 return .other(type: type)
             }
             return .searchCards(decoded)
+        case "composed_ui":
+            // Frame value shape (canonical contract — see
+            // orchet-backend
+            // packages/domain-orchestrator/src/ui-catalog/index.ts):
+            //   { layout: "stack" | "row" | "tabs",
+            //     sections: [{ component, props }, ...] }
+            // Malformed values (missing layout, sections wrong type)
+            // fall back to .other so the chat path never breaks.
+            guard
+                let valueDict = json["value"] as? [String: Any],
+                let data = try? JSONSerialization.data(withJSONObject: valueDict),
+                let decoded = try? JSONDecoder().decode(ComposedUIFrameValue.self, from: data),
+                !decoded.sections.isEmpty
+            else {
+                return .other(type: type)
+            }
+            return .composedUI(decoded)
         case "assistant_suggestions":
             // Frame value shape (canonical contract — see
             // apps/web/lib/chat-suggestions.ts):
