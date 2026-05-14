@@ -19,6 +19,10 @@ struct ChatView: View {
     /// Streaming voice view model — present unconditionally, used only
     /// when `VoiceBackendConfig.current == .streaming`. ORCHET-IOS-PARITY-1.
     @ObservedObject private var streamingVoice: StreamingVoiceViewModel
+    /// ORCHET-IOS-PARITY-1B — reader-mode sheet for SearchResultCard
+    /// taps. Hoisted into RootView so deps + state survive view
+    /// rebuilds; rendered as a sheet over the chat surface.
+    @ObservedObject private var readerController: ReaderSheetController
     @FocusState private var inputFocused: Bool
     @State private var showPermissionAlert = false
     /// ORCHET-IOS-PARITY-1 — toast surfaced when the voice service
@@ -35,11 +39,13 @@ struct ChatView: View {
     init(
         viewModel: ChatViewModel,
         voiceComposer: VoiceComposerViewModel,
-        streamingVoice: StreamingVoiceViewModel
+        streamingVoice: StreamingVoiceViewModel,
+        readerController: ReaderSheetController
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _voiceComposer = StateObject(wrappedValue: voiceComposer)
         self.streamingVoice = streamingVoice
+        self.readerController = readerController
     }
 
     var body: some View {
@@ -96,6 +102,19 @@ struct ChatView: View {
                     }
                 )
             }
+            // ORCHET-IOS-PARITY-1B — reader-mode sheet for
+            // SearchResultCard taps. Mounts when the controller
+            // transitions out of .idle.
+            .sheet(item: readerSheetCardBinding) { card in
+                ReaderSheet(controller: readerController, card: card)
+            }
+    }
+
+    private var readerSheetCardBinding: Binding<SearchCard?> {
+        Binding(
+            get: { readerController.activeCard },
+            set: { newValue in readerController.activeCard = newValue }
+        )
     }
 
     // MARK: - Message container
@@ -183,7 +202,10 @@ struct ChatView: View {
                             // Mirrors web's app/page.tsx mount.
                             if message.role == .assistant,
                                let searchCards = viewModel.searchCardsByMessage[message.id] {
-                                SearchResultCardStack(value: searchCards)
+                                SearchResultCardStack(
+                                    value: searchCards,
+                                    onCardTap: { card in readerController.open(card: card) }
+                                )
                             }
 
                             // Compound-dispatch strip — multi-agent

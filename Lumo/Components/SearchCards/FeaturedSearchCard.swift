@@ -14,6 +14,13 @@ import SwiftUI
 /// shimmer, matches the design system's hero-block rules.
 struct FeaturedSearchCard: View {
     let card: SearchCard
+    /// ORCHET-IOS-PARITY-1B — tap-handler hooked up by
+    /// `SearchResultCardStack`. When supplied, the card becomes a
+    /// `Button` that fires `onTap(card)` (the chat surface opens
+    /// the reader sheet). When nil, the card stays a `Link` for
+    /// the legacy out-to-Safari behavior so older call sites still
+    /// work without modification.
+    var onTap: ((SearchCard) -> Void)? = nil
 
     private var theme: SearchCardTheme {
         SearchCardCategoryTheme.theme(for: card.category)
@@ -29,7 +36,10 @@ struct FeaturedSearchCard: View {
 
     var body: some View {
         Group {
-            if let url = destinationURL {
+            if let onTap {
+                Button { onTap(card) } label: { content }
+                    .buttonStyle(.plain)
+            } else if let url = destinationURL {
                 Link(destination: url) { content }
                     .buttonStyle(.plain)
             } else {

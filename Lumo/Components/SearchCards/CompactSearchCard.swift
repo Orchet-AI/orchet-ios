@@ -26,6 +26,8 @@ struct CompactSearchCard: View {
 
     let card: SearchCard
     let style: Style
+    /// ORCHET-IOS-PARITY-1B — see `FeaturedSearchCard.onTap`.
+    var onTap: ((SearchCard) -> Void)? = nil
 
     private var theme: SearchCardTheme {
         SearchCardCategoryTheme.theme(for: card.category)
@@ -37,7 +39,10 @@ struct CompactSearchCard: View {
 
     var body: some View {
         Group {
-            if let url = destinationURL {
+            if let onTap {
+                Button { onTap(card) } label: { content }
+                    .buttonStyle(.plain)
+            } else if let url = destinationURL {
                 Link(destination: url) { content }
                     .buttonStyle(.plain)
             } else {

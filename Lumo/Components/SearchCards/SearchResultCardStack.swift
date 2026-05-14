@@ -22,6 +22,11 @@ import SwiftUI
 /// scan citations without re-reading the cards.
 struct SearchResultCardStack: View {
     let value: SearchCardsFrameValue
+    /// ORCHET-IOS-PARITY-1B — when supplied, card taps and source-
+    /// chip taps fire this callback (the chat surface opens the
+    /// reader sheet). Without it, cards fall back to the legacy
+    /// `Link` behavior that jumps the user to Safari.
+    var onCardTap: ((SearchCard) -> Void)? = nil
 
     var body: some View {
         if value.cards.isEmpty {
@@ -35,7 +40,7 @@ struct SearchResultCardStack: View {
                 } else {
                     equalWeightLayout
                 }
-                SearchCardsSourcesFooter(cards: value.cards)
+                SearchCardsSourcesFooter(cards: value.cards, onTap: onCardTap)
             }
         }
     }
@@ -48,9 +53,9 @@ struct SearchResultCardStack: View {
             .filter { $0.offset != leadIndex }
             .map { $0.element }
         VStack(alignment: .leading, spacing: 8) {
-            FeaturedSearchCard(card: lead)
+            FeaturedSearchCard(card: lead, onTap: onCardTap)
             ForEach(secondaries) { card in
-                CompactSearchCard(card: card, style: .featuredSecondary)
+                CompactSearchCard(card: card, style: .featuredSecondary, onTap: onCardTap)
             }
         }
     }
@@ -65,7 +70,7 @@ struct SearchResultCardStack: View {
             spacing: 8
         ) {
             ForEach(value.cards) { card in
-                CompactSearchCard(card: card, style: .gridCell)
+                CompactSearchCard(card: card, style: .gridCell, onTap: onCardTap)
             }
         }
     }

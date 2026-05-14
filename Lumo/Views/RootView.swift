@@ -57,6 +57,10 @@ struct RootView: View {
     @StateObject private var historyViewModel: HistoryScreenViewModel
     @StateObject private var connectionsViewModel: ConnectionsScreenViewModel
     @StateObject private var workspaceViewModel: WorkspaceScreenViewModel
+    /// ORCHET-IOS-PARITY-1B — reader-mode sheet controller. Hoisted
+    /// into RootView so re-entries through navigation keep its state
+    /// (in-flight fetch, last-shown article).
+    @StateObject private var readerController: ReaderSheetController
     private let drawerScreensFetcher: DrawerScreensFetching
 
     @State private var path = NavigationPath()
@@ -88,6 +92,7 @@ struct RootView: View {
         drawerScreensFetcher: DrawerScreensFetching,
         deepgramTokenService: DeepgramTokenServicing,
         workspaceFetcher: WorkspaceFetching,
+        readerFetcher: ReaderFetching,
         accessTokenProvider: @escaping () -> String? = { nil },
         onSignOut: @escaping () -> Void
     ) {
@@ -138,6 +143,9 @@ struct RootView: View {
         )
         _workspaceViewModel = StateObject(
             wrappedValue: WorkspaceScreenViewModel(fetcher: workspaceFetcher)
+        )
+        _readerController = StateObject(
+            wrappedValue: ReaderSheetController(service: readerFetcher)
         )
     }
 
@@ -209,7 +217,8 @@ struct RootView: View {
             ChatView(
                 viewModel: chatViewModel,
                 voiceComposer: voiceComposer,
-                streamingVoice: streamingVoice
+                streamingVoice: streamingVoice,
+                readerController: readerController
             )
         }
         .task {
