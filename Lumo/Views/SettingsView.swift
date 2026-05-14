@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var speakResponses: Bool = VoiceSettings.speakResponses
     @State private var hasUsedVoice: Bool = VoiceSettings.hasUsedVoice
     @State private var voiceId: String = VoiceSettings.voiceId
+    @State private var handsFreeContinuous: Bool = VoiceSettings.handsFreeContinuous
     @State private var showSignOutConfirm = false
     @State private var showTestPaymentSheet = false
 
@@ -227,6 +228,27 @@ struct SettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings.speakResponses")
+
+                // IOS-HANDS-FREE-CONTINUOUS-1 — opt-in auto-resume
+                // of the mic after each TTS turn so the user can
+                // keep talking without tapping. Default off; the
+                // legacy push-to-talk path is the safer surface
+                // for first-time users.
+                Toggle(isOn: Binding(
+                    get: { handsFreeContinuous },
+                    set: { newValue in
+                        handsFreeContinuous = newValue
+                        VoiceSettings.handsFreeContinuous = newValue
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hands-free continuous")
+                        Text("Mic re-opens automatically after Orchet finishes speaking, so you can keep talking without tapping.")
+                            .font(LumoFonts.footnote)
+                            .foregroundStyle(LumoColors.labelSecondary)
+                    }
+                }
+                .accessibilityIdentifier("settings.handsFreeContinuous")
 
                 // Deepgram Aura-2 voice picker (DEEPGRAM-IOS-IMPL-1
                 // Phase 4). Two voices today (Thalia / Orpheus) —
