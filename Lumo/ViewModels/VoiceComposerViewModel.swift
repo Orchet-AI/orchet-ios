@@ -204,6 +204,16 @@ final class VoiceComposerViewModel: ObservableObject {
         // User opted back in — clear any prior explicit-stop flag so
         // hands-free auto-resume re-engages next turn.
         userStoppedListening = false
+        // ORCHET-IOS-MEMORY-LEARNING Phase A — voice session start.
+        // Attribute is just the backend kind (streaming vs batch); the
+        // fact extractor cohorts by time-of-day across this kind.
+        BehaviourSignalService.shared.record(
+            kind: .voiceSessionStart,
+            attributes: [
+                "backend": .string(VoiceBackendConfig.current.rawValue),
+                "trigger": .string("tap"),
+            ]
+        )
         await ensureAndStart()
     }
 

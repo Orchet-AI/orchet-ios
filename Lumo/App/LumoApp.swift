@@ -71,6 +71,16 @@ struct LumoApp: App {
         let userID: () -> String? = { [weak auth] in auth?.state.userID }
         let token: () -> String? = { [weak auth] in auth?.currentAccessToken() }
 
+        // ORCHET-IOS-MEMORY-LEARNING Phase A — point the behaviour
+        // signal singleton at the live gateway + auth providers so
+        // the rest of the app can call BehaviourSignalService.shared
+        // .record(...) without knowing about boot wiring.
+        BehaviourSignalService.shared.configure(
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
+
         self.chatService = ChatService(
             baseURL: config.apiBaseURL,
             gatewayBaseURL: config.gatewayBaseURL,
@@ -203,6 +213,17 @@ struct LumoApp: App {
             intentsFetcher: intentsClient
         )
         .onAppear {
+            // ORCHET-IOS-MEMORY-LEARNING Phase A — first signal of
+            // every app lifecycle. didEnterBackground/willEnterForeground
+            // are observed inside BehaviourSignalService itself; the
+            // cold-launch event needs to fire from SwiftUI's onAppear
+            // because UIApplication.didFinishLaunching has already
+            // fired before this scene mounts.
+            BehaviourSignalService.shared.record(
+                kind: .appOpen,
+                attributes: ["cold_launch": .bool(true)]
+            )
+
             // The delegate is constructed by UIKit before our init's
             // services exist; install them now so notification + bg-task
             // hooks have backing implementations.

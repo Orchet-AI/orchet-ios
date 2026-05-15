@@ -56,7 +56,15 @@ struct MarketplaceView: View {
         .background(LumoColors.background.ignoresSafeArea())
         .navigationTitle("Marketplace")
         .navigationBarTitleDisplayMode(.large)
-        .task { await viewModel.load() }
+        .task {
+            // ORCHET-IOS-MEMORY-LEARNING Phase A — fires once per
+            // mount. The fact extractor cohorts these to learn
+            // "this user browses marketplace ~3× a week" without
+            // needing every scroll or tap (those land in the
+            // existing preference_events log).
+            BehaviourSignalService.shared.record(kind: .marketplaceBrowse)
+            await viewModel.load()
+        }
         .refreshable { await viewModel.load() }
     }
 
