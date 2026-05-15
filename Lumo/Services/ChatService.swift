@@ -10,6 +10,7 @@ enum ChatEvent: Equatable {
     case compoundDispatch(CompoundDispatchPayload)
     case searchCards(SearchCardsFrameValue)
     case composedUI(ComposedUIFrameValue)
+    case connectionRequired(ConnectionRequiredFrameValue)
     case other(type: String)
 }
 
@@ -291,6 +292,24 @@ final class ChatService {
                 return .other(type: type)
             }
             return .composedUI(decoded)
+        case "connection_required":
+            // Frame value shape (canonical contract — see
+            // orchet-backend packages/domain-orchestrator/src/
+            // executor/connection-required.ts):
+            //   { agent_id, display_name, authorize_url, blocked_tool }
+            // Schema mismatch / missing fields / non-https URL: drop
+            // to .other so the chat surface never crashes on a bad
+            // frame; the orchestrator has a deterministic fallback
+            // that points the user at the Marketplace.
+            guard
+                let valueDict = json["value"] as? [String: Any],
+                let data = try? JSONSerialization.data(withJSONObject: valueDict),
+                let decoded = try? JSONDecoder().decode(ConnectionRequiredFrameValue.self, from: data),
+                decoded.isRenderable
+            else {
+                return .other(type: type)
+            }
+            return .connectionRequired(decoded)
         case "assistant_suggestions":
             // Frame value shape (canonical contract — see
             // apps/web/lib/chat-suggestions.ts):

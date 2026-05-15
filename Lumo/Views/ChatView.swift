@@ -222,6 +222,26 @@ struct ChatView: View {
                                 )
                             }
 
+                            // PARITY-1D — inline OAuth connect card.
+                            // Fires when the orchestrator emits a
+                            // `connection_required` frame for an
+                            // OAuth-gated tool the user hasn't
+                            // authorized. ASWebAuthenticationSession
+                            // drives the dance; on completion the
+                            // view model auto-sends a follow-up turn.
+                            if message.role == .assistant,
+                               let cr = viewModel.connectionRequiredByMessage[message.id] {
+                                ConnectionRequestCardView(
+                                    value: cr,
+                                    onConnected: { [weak vm = viewModel] agentId in
+                                        vm?.handleConnectionCompleted(
+                                            agentId: agentId,
+                                            displayName: cr.display_name
+                                        )
+                                    }
+                                )
+                            }
+
                             // Compound-dispatch strip — multi-agent
                             // trip orchestration. Lives below the
                             // assistant message that triggered it

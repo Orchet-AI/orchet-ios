@@ -92,6 +92,19 @@ final class ChatViewModel: ObservableObject {
     /// reset/loadSession, replaced on re-emission, persisted via
     /// the replay decoder.
     @Published private(set) var composedUIByMessage: [UUID: ComposedUIFrameValue] = [:]
+
+    /// PARITY-1D — inline OAuth-connect cards. The orchestrator emits
+    /// a `connection_required` frame when a tool dispatch returns
+    /// `code: "connection_required"` and the backend successfully
+    /// minted an authorize URL. iOS opens it via
+    /// `ASWebAuthenticationSession`. After completion we auto-send a
+    /// follow-up so the orchestrator retries the original tool.
+    @Published private(set) var connectionRequiredByMessage: [UUID: ConnectionRequiredFrameValue] = [:]
+
+    /// Per-agent_id dedup so a user who taps Connect twice doesn't
+    /// fire two auto-retry turns. Mirrors web's
+    /// `retriedConnectionAgentIds`.
+    private var retriedConnectionAgentIds: Set<String> = []
     /// Per-leg status overrides keyed by compound_transaction_id.
     /// Per-leg updates arrive via the per-compound stream and merge
     /// into the inner dictionary (leg_id → latest status). The view
@@ -277,6 +290,8 @@ final class ChatViewModel: ObservableObject {
         compoundDispatchByMessage = [:]
         searchCardsByMessage = [:]
         composedUIByMessage = [:]
+        connectionRequiredByMessage = [:]
+        retriedConnectionAgentIds = []
         compoundLegStatusOverrides = [:]
         compoundLegMetadata = [:]
         compoundLegDetailExpandedFor = []
@@ -527,6 +542,8 @@ final class ChatViewModel: ObservableObject {
                     attachSearchCards(value, assistantID: assistantID)
                 case .composedUI(let value):
                     attachComposedUI(value, assistantID: assistantID)
+                case .connectionRequired(let value):
+                    attachConnectionRequired(value, assistantID: assistantID)
                 case .other:
                     continue
                 }
@@ -591,6 +608,38 @@ final class ChatViewModel: ObservableObject {
     /// backend's flow controller can do the actual booking step.
     private func attachComposedUI(_ value: ComposedUIFrameValue, assistantID: UUID) {
         composedUIByMessage[assistantID] = value
+    }
+
+    /// PARITY-1D — inline-connect frame attach.
+    private func attachConnectionRequired(
+        _ value: ConnectionRequiredFrameValue,
+        assistantID: UUID
+    ) {
+        guard value.isRenderable else { return }
+        connectionRequiredByMessage[assistantID] = value
+    }
+
+    /// Called by `ConnectionRequestCardView` once the user finishes
+    /// the OAuth dance in ASWebAuthenticationSession. Sends ONE
+    /// follow-up turn per agent_id so the orchestrator retries the
+    /// blocked tool with the new live connection. Dedup matches web.
+    ///
+    /// Adds a user bubble for the follow-up text so the chat thread
+    /// reads coherently — matches the web flow where the user can
+    /// see exactly what was auto-submitted on their behalf.
+    func handleConnectionCompleted(agentId: String, displayName: String) {
+        guard !retriedConnectionAgentIds.contains(agentId) else { return }
+        retriedConnectionAgentIds.insert(agentId)
+        // Intentionally NOT gating on `isStreaming`: a user with two
+        // connection cards (e.g. Google + Lumo Rentals) who connects
+        // both in quick succession deserves both follow-ups to land.
+        // The orchestrator handles overlapping turns; the dedup set
+        // above is the only invariant we owe.
+        lastVoiceMode = .text
+        startStream(
+            prompt: "I've connected \(displayName). Please continue with my previous request.",
+            addUserBubble: true
+        )
     }
 
     private func attachCompoundDispatch(_ dispatch: CompoundDispatchPayload, assistantID: UUID) {
