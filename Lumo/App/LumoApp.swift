@@ -81,6 +81,19 @@ struct LumoApp: App {
             accessTokenProvider: token
         )
 
+        // ORCHET-IOS-MEMORY-LEARNING Phase B — calendar signal
+        // capture. Service is wired even when the user hasn't
+        // opted in; .syncNow() self-gates on the in-app toggle +
+        // OS permission state. Cold-launch sync fires immediately
+        // for users who already opted in; subsequent syncs ride
+        // EKEventStoreChanged + willEnterForeground.
+        CalendarSignalService.shared.configure(
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
+        CalendarSignalService.shared.syncNow()
+
         self.chatService = ChatService(
             baseURL: config.apiBaseURL,
             gatewayBaseURL: config.gatewayBaseURL,

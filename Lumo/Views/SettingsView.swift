@@ -49,6 +49,7 @@ struct SettingsView: View {
         Form {
             accountSection
             connectionsSection
+            memorySourcesSection
             securitySection
             paymentsSection
             voiceSection
@@ -148,6 +149,26 @@ struct SettingsView: View {
                 }
             }
             .accessibilityIdentifier("settings.connections")
+        }
+    }
+
+    @ViewBuilder
+    private var memorySourcesSection: some View {
+        Section("Memory Sources") {
+            // ORCHET-IOS-MEMORY-LEARNING Phase B — each source is
+            // opt-in inside MemorySourcesView; this row is just the
+            // navigation entry.
+            NavigationLink {
+                MemorySourcesView()
+            } label: {
+                HStack {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundStyle(LumoColors.cyanDeep)
+                        .frame(width: 26)
+                    Text("Memory Sources")
+                }
+            }
+            .accessibilityIdentifier("settings.memorySources")
         }
     }
 
