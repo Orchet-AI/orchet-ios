@@ -37,13 +37,17 @@ final class VoiceComposerViewModel: ObservableObject {
             return false
         }
 
+        /// True only for the .error case — a genuine failure the
+        /// user should retry. `.permissionDenied` is intentionally
+        /// EXCLUDED: an undecided / denied microphone permission is
+        /// the "tap to grant" state, not an error. Showing the red
+        /// error glyph at launch (before the user has tapped once)
+        /// is wrong — the OS permission prompt is the right surface.
+        /// `tapToTalk` re-runs the permission request when the user
+        /// taps in any non-listening state.
         var isError: Bool {
-            switch self {
-            case .error, .permissionDenied:
-                return true
-            default:
-                return false
-            }
+            if case .error = self { return true }
+            return false
         }
 
         var partialTranscript: String? {
