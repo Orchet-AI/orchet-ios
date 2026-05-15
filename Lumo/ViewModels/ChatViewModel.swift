@@ -169,6 +169,15 @@ final class ChatViewModel: ObservableObject {
         guard !text.isEmpty, !isStreaming else { return }
         input = ""
         lastVoiceMode = mode
+        // ORCHET-IOS-MEMORY-LEARNING Phase A — captures only the
+        // mode discriminator, never the prompt text. The backend
+        // already learns from the prompt via the chat turn pipeline;
+        // this signal exists so the fact extractor can cohort by
+        // time-of-day / mode usage without re-reading turns.
+        BehaviourSignalService.shared.record(
+            kind: .chatTurnSent,
+            attributes: ["mode": .string(mode.rawValue)]
+        )
         startStream(prompt: text, addUserBubble: true)
     }
 

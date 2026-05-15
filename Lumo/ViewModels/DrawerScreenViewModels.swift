@@ -207,6 +207,17 @@ final class MarketplaceScreenViewModel: ObservableObject {
         defer { installingAgentID = nil }
         do {
             let installedAt = try await fetcher.installAgent(id: id)
+            // ORCHET-IOS-MEMORY-LEARNING Phase A — successful install
+            // signal. Cohort logic uses these to detect intent
+            // patterns ("user installed flight-booking agents
+            // 3 weeks in a row before booking SFO").
+            BehaviourSignalService.shared.record(
+                kind: .agentInstallCompleted,
+                attributes: [
+                    "agent_id": .string(id),
+                    "source": .string("marketplace"),
+                ]
+            )
             // Re-resolve the index — the catalog could have been
             // refreshed mid-install; if the agent disappeared we
             // skip the local state update rather than crash.
