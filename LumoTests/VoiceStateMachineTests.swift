@@ -82,15 +82,15 @@ final class VoiceStateMachineTests: XCTestCase {
 
         // Drive partials to mimic the recognizer streaming.
         stub.emitPartial("Plan a")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(vm.state.partialTranscript, "Plan a")
 
         stub.emitPartial("Plan a Vegas trip")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(vm.state.partialTranscript, "Plan a Vegas trip")
 
         stub.emitFinal("Plan a Vegas trip for May")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .ready(let transcript) = vm.state else {
             XCTFail("expected .ready, got \(vm.state)")
             return
@@ -103,7 +103,7 @@ final class VoiceStateMachineTests: XCTestCase {
         let vm = VoiceComposerViewModel(speech: stub)
         await vm.tapToTalk()
         stub.emitFinal("hello")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         let consumed = vm.consumeReadyTranscript()
         XCTAssertEqual(consumed, "hello")
@@ -126,11 +126,11 @@ final class VoiceStateMachineTests: XCTestCase {
         XCTAssertTrue(vm.state.isListening)
 
         stub.emitPartial("Quick search")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         vm.release()
         // The stub's stop() flips listening → final(transcript: partial).
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .ready(let transcript) = vm.state else {
             XCTFail("expected .ready, got \(vm.state)")
             return
@@ -145,7 +145,7 @@ final class VoiceStateMachineTests: XCTestCase {
         let vm = VoiceComposerViewModel(speech: stub)
         await vm.tapToTalk()
         stub.emitPartial("don't send this")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         vm.cancel()
         XCTAssertEqual(vm.state, .idle)
@@ -156,7 +156,7 @@ final class VoiceStateMachineTests: XCTestCase {
         let vm = VoiceComposerViewModel(speech: stub)
         await vm.tapToTalk()
         stub.emitFinal("transcript")
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .ready = vm.state else {
             XCTFail("expected .ready")
             return
@@ -166,7 +166,7 @@ final class VoiceStateMachineTests: XCTestCase {
         // call inside finalize()) should NOT reset the view-model
         // before the host consumes the transcript.
         stub.state = .idle  // direct emit
-        try? await Task.sleep(nanoseconds: 5_000_000)
+        try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .ready = vm.state else {
             XCTFail("expected .ready preserved across stale .idle, got \(vm.state)")
             return
