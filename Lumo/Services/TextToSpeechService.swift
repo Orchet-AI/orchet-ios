@@ -294,6 +294,14 @@ final class DeepgramTTSSession {
     private var receiveTask: Task<Void, Never>?
     private var bufferCount: Int = 0
     private var flushed: Bool = false
+    /// Set on `cancel()` to harden every async re-entry — receive
+    /// loop, scheduleBuffer completions, audio-session interruption
+    /// handler — against touching a torn-down engine. The crash class
+    /// this guards: `player.scheduleBuffer(buffer)` after the player
+    /// has been detached / engine stopped, which raises an
+    /// NSException on the audio thread.
+    private var cancelled: Bool = false
+    private var sessionEventsTask: Task<Void, Never>?
 
     init(
         tokenService: DeepgramTokenServicing,
@@ -316,9 +324,38 @@ final class DeepgramTTSSession {
             try audioSession.configureForVoiceConversation()
             try setupAudioEngine()
             try await openSocket(attempt: 0)
+            subscribeToSessionEvents()
         } catch {
             onError((error as? LocalizedError)?.errorDescription ?? "\(error)")
             cancel()
+        }
+    }
+
+    /// Cancel playback on AVAudioSession interruption / route change.
+    /// Without this, an incoming phone call + a hot `scheduleBuffer`
+    /// crashed the audio thread because the engine had been stopped
+    /// by the system but our local engine reference still scheduled
+    /// against it.
+    private func subscribeToSessionEvents() {
+        sessionEventsTask?.cancel()
+        sessionEventsTask = Task { [weak self] in
+            guard let stream = self?.audioSession.events.values else { return }
+            for await event in stream {
+                guard let self else { return }
+                switch event {
+                case .interruptionBegan:
+                    // System has yanked the session. Surface as an
+                    // error so the chat surface can return to .idle
+                    // and prevent further scheduleBuffer calls.
+                    self.onError("Voice playback was interrupted.")
+                    self.cancel()
+                case .interruptionEnded, .routeChanged:
+                    // Don't auto-resume; let the user re-tap. The
+                    // safer path — auto-resume after a route swap
+                    // can blast unexpected audio to the new device.
+                    break
+                }
+            }
         }
     }
 
@@ -341,11 +378,26 @@ final class DeepgramTTSSession {
     }
 
     func cancel() {
+        // Idempotent — barge-in tap + AVAudioSession interruption +
+        // explicit teardown can all race. The cancelled flag ensures
+        // the AVAudioEngine teardown happens exactly once, and every
+        // re-entry path (receive loop, scheduleBuffer completion)
+        // checks it before touching the engine.
+        guard !cancelled else { return }
+        cancelled = true
+        sessionEventsTask?.cancel()
+        sessionEventsTask = nil
         receiveTask?.cancel()
         receiveTask = nil
         websocket?.close()
         websocket = nil
+        // Stop the player BEFORE detaching from the engine. Order
+        // matters: stop() drains pending buffers' completion handlers
+        // synchronously; detaching first leaves them dangling.
         playerNode?.stop()
+        if let engine = audioEngine, let node = playerNode {
+            engine.detach(node)
+        }
         playerNode = nil
         audioEngine?.stop()
         audioEngine = nil
@@ -405,6 +457,7 @@ final class DeepgramTTSSession {
     }
 
     private func handle(message: DeepgramTTSIncomingMessage) {
+        guard !cancelled else { return }
         switch message {
         case .audio(let data):
             schedule(audioData: data)
@@ -445,7 +498,19 @@ final class DeepgramTTSSession {
     }
 
     private func schedule(audioData data: Data) {
-        guard let player = playerNode,
+        // Hard guards before touching the player:
+        //   - `cancelled` is the post-teardown flag (set by cancel()).
+        //     A late audio chunk arriving after the user tapped barge-
+        //     in would otherwise schedule against a detached player
+        //     and crash the audio thread.
+        //   - `engine.isRunning` defends against AVAudioSession
+        //     interruptions that stopped the engine without our flag
+        //     flipping (e.g. brief route flip we didn't observe).
+        //   - `data.isEmpty` skips ghost payloads.
+        guard !cancelled,
+              let player = playerNode,
+              let engine = audioEngine,
+              engine.isRunning,
               let format = AVAudioFormat(
                 commonFormat: .pcmFormatInt16,
                 sampleRate: 48000,
@@ -468,8 +533,13 @@ final class DeepgramTTSSession {
         }
         bufferCount += 1
         player.scheduleBuffer(buffer) { [weak self] in
+            // Completion handler runs on the audio thread. Hop back
+            // to MainActor and tolerate the session having been
+            // cancelled in between (weak self covers deinit, but
+            // cancelled covers cancel-without-deinit).
             Task { @MainActor in
-                self?.bufferCount = max(0, (self?.bufferCount ?? 1) - 1)
+                guard let self, !self.cancelled else { return }
+                self.bufferCount = max(0, self.bufferCount - 1)
             }
         }
         voiceTurn?.markFirstAudibleSample(audioBytes: data.count)
