@@ -92,6 +92,10 @@
 	<string>Orchet uses on-device speech recognition to turn your voice into the messages you send. Transcripts are processed locally; only the resulting text is sent to Orchet.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Orchet notifies you about trip updates, proactive suggestions, and payment receipts. You can customize categories in Settings.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Orchet uses your calendar to proactively remind you and to learn what you're doing day-to-day. You control this in Settings → Memory Sources, where you can also clear what Orchet has learned at any time.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Orchet uses your reminders to learn your routines and surface them at the right moment. Toggle this off in Settings → Memory Sources, or use the in-app "Forget" button to clear what Orchet has remembered.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
