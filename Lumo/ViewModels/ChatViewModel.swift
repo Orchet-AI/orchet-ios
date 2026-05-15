@@ -315,7 +315,20 @@ final class ChatViewModel: ObservableObject {
         do {
             let resp = try await fetcher.fetchSessionMessages(sessionID: trimmed)
             sessionID = trimmed
-            messages = resp.messages.map { Self.makeChatMessage(from: $0) }
+            // Build messages first so we have the assigned UUIDs to
+            // index the attach maps with. The DTO's `id` field is a
+            // server-side string id; iOS's ChatMessage.id is a fresh
+            // UUID — we can't use the server id as a key.
+            let rehydrated: [(message: ChatMessage, dto: ReplayedMessageDTO)] =
+                resp.messages.map { (Self.makeChatMessage(from: $0), $0) }
+            messages = rehydrated.map(\.message)
+
+            // Reset all attach maps + then re-fill from the rich
+            // frames the server replayed. Replay reattach for
+            // suggestions / selections / summaries / compound is
+            // staged separately; this PR only covers the frames
+            // that the server actually persists today
+            // (search_cards, composed_ui, connection_required).
             input = ""
             error = nil
             isStreaming = false
@@ -324,9 +337,25 @@ final class ChatViewModel: ObservableObject {
             selectionsByMessage = [:]
             summariesByMessage = [:]
             compoundDispatchByMessage = [:]
+            searchCardsByMessage = [:]
+            composedUIByMessage = [:]
+            connectionRequiredByMessage = [:]
+            retriedConnectionAgentIds = []
             compoundLegStatusOverrides = [:]
             compoundLegMetadata = [:]
             compoundLegDetailExpandedFor = []
+
+            for (message, dto) in rehydrated where message.role == .assistant {
+                if let sc = dto.searchCards {
+                    searchCardsByMessage[message.id] = sc
+                }
+                if let cu = dto.composedUI {
+                    composedUIByMessage[message.id] = cu
+                }
+                if let cr = dto.connectionRequired, cr.isRenderable {
+                    connectionRequiredByMessage[message.id] = cr
+                }
+            }
         } catch {
             self.error = "Couldn't open that conversation."
         }
