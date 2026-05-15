@@ -381,17 +381,58 @@ struct ConnectionsResponseDTO: Codable, Equatable {
 }
 
 /// MOBILE-CHAT-LOAD-SESSION-1 — replayed messages from a specific
-/// session, returned by `GET /api/history/sessions/{id}/messages`.
-/// Mirrors web's ReplayedChatMessage shape (apps/web/lib/history-replay.ts).
-/// iOS-v1 only consumes id / role / content / created_at; the rich
-/// frames (summary / selections / suggestions / compoundDispatch /
-/// mission) are passed through as-is for forward compat but the UI
-/// re-renders them lazily as plain text for now.
+/// session, returned by `GET /history/sessions/{id}/messages`.
+/// Mirrors web's ReplayedChatMessage shape (orchet-backend
+/// services/orchestrator/src/routes/history.ts).
+///
+/// **Rich-frame reattach (added when reloading a session):**
+/// The backend persists `search_cards`, `composed_ui`, and
+/// `connection_required` frame values alongside the assistant
+/// message so a session reload restores the same cards under the
+/// prose. iOS now decodes these and the chat view-model rehydrates
+/// the per-message attach maps in `loadSession`.
+///
+/// Older frames (summary / selections / suggestions /
+/// compoundDispatch / mission) are still passed through as-is for
+/// forward compat — replay reattach for those is staged separately
+/// (each needs its own typed Codable + view-model rehydration).
 struct ReplayedMessageDTO: Codable, Equatable {
     let id: String
     let role: String
     let content: String
     let created_at: String
+    /// search_cards frame value persisted on the assistant message.
+    let searchCards: SearchCardsFrameValue?
+    /// composed_ui frame value persisted on the assistant message.
+    let composedUI: ComposedUIFrameValue?
+    /// connection_required frame value persisted on the assistant
+    /// message. Replayed authorize_urls may be past their TTL — the
+    /// card will still render but the OAuth dance may fail; the user
+    /// can re-ask to mint a fresh URL.
+    let connectionRequired: ConnectionRequiredFrameValue?
+
+    /// Memberwise initializer with nil defaults on the rich-frame
+    /// fields. Without this Swift's auto-synthesized memberwise
+    /// init requires every call site to pass all fields — which is
+    /// hostile to existing test fixtures that only care about
+    /// id/role/content/created_at.
+    init(
+        id: String,
+        role: String,
+        content: String,
+        created_at: String,
+        searchCards: SearchCardsFrameValue? = nil,
+        composedUI: ComposedUIFrameValue? = nil,
+        connectionRequired: ConnectionRequiredFrameValue? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.created_at = created_at
+        self.searchCards = searchCards
+        self.composedUI = composedUI
+        self.connectionRequired = connectionRequired
+    }
 }
 
 struct SessionMessagesResponseDTO: Codable, Equatable {
