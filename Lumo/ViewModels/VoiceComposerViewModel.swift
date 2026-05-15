@@ -37,6 +37,15 @@ final class VoiceComposerViewModel: ObservableObject {
             return false
         }
 
+        var isError: Bool {
+            switch self {
+            case .error, .permissionDenied:
+                return true
+            default:
+                return false
+            }
+        }
+
         var partialTranscript: String? {
             if case .listening(let p) = self { return p }
             return nil

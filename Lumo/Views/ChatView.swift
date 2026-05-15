@@ -431,7 +431,11 @@ struct ChatView: View {
                         mode: ChatComposerTrailingButton.Mode.from(
                             input: viewModel.input,
                             isListening: voiceComposer.state.isListening,
-                            phase: voiceComposer.phase
+                            phase: voiceComposer.phase,
+                            isVoiceError: voiceComposer.state.isError,
+                            isThinking: viewModel.isStreaming
+                                && !voiceComposer.state.isListening
+                                && !voiceComposer.isMicPausedForTts
                         ),
                         // Stop affordance during AGENT_SPEAKING /
                         // POST_SPEAKING_GUARD must remain tappable —
@@ -467,10 +471,17 @@ struct ChatView: View {
         let mode = ChatComposerTrailingButton.Mode.from(
             input: viewModel.input,
             isListening: voiceComposer.state.isListening,
-            phase: voiceComposer.phase
+            phase: voiceComposer.phase,
+            isVoiceError: voiceComposer.state.isError,
+            isThinking: viewModel.isStreaming
+                && !voiceComposer.state.isListening
+                && !voiceComposer.isMicPausedForTts
         )
         switch mode.tapAction {
-        case .startVoice:
+        case .startVoice, .retryVoice:
+            // Error tap retries from idle — same as start-voice
+            // because the underlying tap-to-talk path resets the
+            // composer state machine. Mirrors web's "tap to retry".
             Task { await voiceComposer.tapToTalk() }
         case .stopVoice:
             voiceComposer.release()
@@ -481,6 +492,9 @@ struct ChatView: View {
             // VoiceComposerViewModel's TTS observer then clears
             // the gate to .listening on the resulting .idle event.
             voiceComposer.requestBargeIn()
+        case .noop:
+            // Thinking — let the assistant turn complete.
+            break
         }
     }
 
