@@ -210,7 +210,7 @@ final class ChatService {
             }
         case "summary":
             // Frame value shape (canonical contract — see
-            // node_modules/@lumo/agent-sdk/src/confirmation.ts):
+            // node_modules/@orchet/agent-sdk/src/confirmation.ts):
             //   { kind: "structured-itinerary" | "structured-trip" | …,
             //     hash, payload, session_id, turn_id, rendered_at }
             // Only structured-itinerary decodes today; future kinds
