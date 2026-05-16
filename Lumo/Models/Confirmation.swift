@@ -2,7 +2,7 @@ import Foundation
 
 /// Mirror of the web/SDK `ConfirmationSummary` envelope used to gate
 /// money-moving tool calls. Source of truth lives in
-/// `node_modules/@lumo/agent-sdk/src/confirmation.ts`. The orchestrator
+/// `node_modules/@orchet/agent-sdk/src/confirmation.ts`. The orchestrator
 /// emits one of these via the `summary` SSE frame whenever a tool's
 /// response should render as a structured booking gate (flight, trip,
 /// reservation, cart, generic booking).
