@@ -94,6 +94,15 @@ struct LumoApp: App {
         )
         CalendarSignalService.shared.syncNow()
 
+        // Phase C — Mail memory toggle. Wire the gateway transport
+        // so Settings → Memory Sources → Mail can read/write the
+        // server-side `user_profile.mail_memory_enabled` flag.
+        MemoryMailService.shared.configure(
+            gatewayBaseURL: config.gatewayBaseURL,
+            userIDProvider: userID,
+            accessTokenProvider: token
+        )
+
         self.chatService = ChatService(
             baseURL: config.apiBaseURL,
             gatewayBaseURL: config.gatewayBaseURL,
