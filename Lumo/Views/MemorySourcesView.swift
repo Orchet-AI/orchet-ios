@@ -29,9 +29,13 @@ import SwiftUI
 struct MemorySourcesView: View {
     @State private var calendarEnabled = MemorySourcesSettings.calendarEnabled
     @State private var remindersEnabled = MemorySourcesSettings.remindersEnabled
+    @State private var mailEnabled = false
+    @State private var mailLoading = true
     @State private var calendarPermissionAlert = false
     @State private var forgetConfirm = false
     @State private var forgetInFlight = false
+    @State private var mailForgetConfirm = false
+    @State private var mailForgetInFlight = false
 
     var body: some View {
         List {
@@ -51,6 +55,15 @@ struct MemorySourcesView: View {
                 .onChange(of: remindersEnabled) { _, newValue in
                     MemorySourcesSettings.remindersEnabled = newValue
                 }
+
+                Toggle(isOn: $mailEnabled) {
+                    Label("Mail", systemImage: "envelope")
+                }
+                .accessibilityIdentifier("settings.memory.mail")
+                .disabled(mailLoading)
+                .onChange(of: mailEnabled) { _, newValue in
+                    Task { await handleMailToggle(newValue) }
+                }
             }
 
             Section {
@@ -61,10 +74,19 @@ struct MemorySourcesView: View {
                 }
                 .disabled(forgetInFlight)
                 .accessibilityIdentifier("settings.memory.forget")
+
+                Button(role: .destructive) {
+                    mailForgetConfirm = true
+                } label: {
+                    Label("Forget all mail memory", systemImage: "trash")
+                }
+                .disabled(mailForgetInFlight)
+                .accessibilityIdentifier("settings.memory.mail.forget")
             }
         }
         .navigationTitle("Memory Sources")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadMailState() }
         .alert("Calendar access denied", isPresented: $calendarPermissionAlert) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -92,6 +114,22 @@ struct MemorySourcesView: View {
                 "Orchet will delete the calendar events it has stored. " +
                 "Habits it has already learned stay — you can clear those " +
                 "individually under Memory → Facts."
+            )
+        }
+        .confirmationDialog(
+            "Forget mail memory?",
+            isPresented: $mailForgetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Forget everything", role: .destructive) {
+                Task { await handleMailForget() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Orchet will forget every email it has considered. " +
+                "Facts it already learned (trips, orders, reservations) stay — " +
+                "clear those individually under Memory → Facts."
             )
         }
     }
@@ -145,5 +183,34 @@ struct MemorySourcesView: View {
         await CalendarSignalService.shared.forgetEverything()
         calendarEnabled = false
         remindersEnabled = false
+    }
+
+    @MainActor
+    private func loadMailState() async {
+        mailLoading = true
+        defer { mailLoading = false }
+        if let enabled = await MemoryMailService.shared.fetchEnabled() {
+            mailEnabled = enabled
+        }
+    }
+
+    @MainActor
+    private func handleMailToggle(_ newValue: Bool) async {
+        // Optimistic flip already happened via @State binding. If the
+        // PATCH fails, roll back so the UI stays honest.
+        let ok = await MemoryMailService.shared.setEnabled(newValue)
+        if !ok {
+            mailEnabled = !newValue
+        }
+    }
+
+    @MainActor
+    private func handleMailForget() async {
+        mailForgetInFlight = true
+        defer { mailForgetInFlight = false }
+        await MemoryMailService.shared.forgetEverything()
+        // Server-side flag is independent of the audit rows; we don't
+        // flip mailEnabled here — the user may want to keep collecting
+        // forward, just clear the past.
     }
 }
